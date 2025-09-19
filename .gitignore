@@ -50,3 +50,4 @@ dist/
 *.log
 
 /lib/generated/prisma
+packages/shared/node_modules/
