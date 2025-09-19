@@ -14,7 +14,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { Loader2, Link as LinkIcon, Shuffle, Copy, CheckCircle, ChevronDown } from 'lucide-react';
+import { Loader2, Link as LinkIcon, Shuffle, Copy, CheckCircle, ChevronDown, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateRandomSlug } from '@/lib/utils/slug';
 import { appConfig } from '@/lib/config/app';
@@ -23,6 +23,8 @@ import { UtmBuilderFormData, UTM_VALIDATION_RULES } from '@/packages/shared/src/
 import UTMBuilder from '@/components/utm/UTMBuilder';
 import UTMTemplateSelector from '@/components/utm/UTMTemplateSelector';
 import { trpc } from '@/lib/trpc/client';
+import { usePermissions } from '@/hooks/usePermissions';
+import { Permission } from '@/lib/permissions';
 
 const linkFormSchema = z.object({
   url: z.string()
@@ -78,14 +80,20 @@ type LinkFormData = z.infer<typeof linkFormSchema>;
 interface LinkFormProps {
   onSubmit: (data: LinkFormData & { finalSlug: string }) => Promise<void>;
   isLoading?: boolean;
+  linkId?: string;
+  linkOwnerId?: string;
 }
 
-export function LinkForm({ onSubmit, isLoading = false }: LinkFormProps) {
+export function LinkForm({ onSubmit, isLoading = false, linkId, linkOwnerId }: LinkFormProps) {
   const [showSuccess, setShowSuccess] = useState(false);
   const [createdLink, setCreatedLink] = useState('');
   const [isUtmOpen, setIsUtmOpen] = useState(false);
   const [utmData, setUtmData] = useState<UtmBuilderFormData>({});
   const [finalUrl, setFinalUrl] = useState('');
+
+  const { hasPermission, canUpdateLink } = usePermissions();
+  const isEditing = !!linkId;
+  const canEdit = isEditing ? canUpdateLink(linkOwnerId || '') : hasPermission(Permission.LINKS_CREATE);
 
   const { data: templates, isLoading: templatesLoading } = trpc.utmTemplate.list.useQuery();
   const createTemplate = trpc.utmTemplate.create.useMutation({
@@ -344,16 +352,25 @@ export function LinkForm({ onSubmit, isLoading = false }: LinkFormProps) {
             </Alert>
           )}
 
-          <Button type="submit" disabled={isLoading} className="w-full">
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating Link...
-              </>
-            ) : (
-              'Create Link'
-            )}
-          </Button>
+          {canEdit ? (
+            <Button type="submit" disabled={isLoading} className="w-full">
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {isEditing ? 'Updating Link...' : 'Creating Link...'}
+                </>
+              ) : (
+                isEditing ? 'Update Link' : 'Create Link'
+              )}
+            </Button>
+          ) : (
+            <Alert>
+              <Shield className="h-4 w-4" />
+              <AlertDescription>
+                You don't have permission to {isEditing ? 'edit this link' : 'create links'}.
+              </AlertDescription>
+            </Alert>
+          )}
         </form>
       </CardContent>
     </Card>

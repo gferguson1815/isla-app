@@ -7,9 +7,9 @@ if (!stripeSecretKey && process.env.NODE_ENV === 'production') {
   throw new Error('STRIPE_SECRET_KEY is not set in environment variables');
 }
 
-export const stripe = stripeSecretKey 
+export const stripe = stripeSecretKey
   ? new Stripe(stripeSecretKey, {
-      apiVersion: '2024-12-18.acacia',
+      apiVersion: '2025-08-27.basil',
       typescript: true,
     })
   : ({} as Stripe); // Mock object for testing

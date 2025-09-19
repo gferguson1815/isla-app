@@ -21,7 +21,7 @@ export async function createContext({
   };
 }
 
-type Context = Awaited<ReturnType<typeof createContext>>;
+export type Context = Awaited<ReturnType<typeof createContext>>;
 
 const t = initTRPC.context<Context>().create({
   transformer: superjson,
@@ -38,6 +38,7 @@ const t = initTRPC.context<Context>().create({
 });
 
 export const router = t.router;
+export const middleware = t.middleware;
 export const publicProcedure = t.procedure;
 
 export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "@supabase/auth-helpers-react";
@@ -26,20 +26,25 @@ import {
   User,
   HelpCircle,
   Command,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/hooks/usePermissions";
+import { Permission } from "@/lib/permissions";
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
+  permission?: Permission;
+  requiresAdmin?: boolean;
 }
 
-const navItems: NavItem[] = [
+const allNavItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: <Home className="h-4 w-4" /> },
   { href: "/links", label: "Links", icon: <Link2 className="h-4 w-4" /> },
-  { href: "/analytics", label: "Analytics", icon: <BarChart3 className="h-4 w-4" /> },
-  { href: "/settings", label: "Settings", icon: <Settings className="h-4 w-4" /> },
+  { href: "/analytics", label: "Analytics", icon: <BarChart3 className="h-4 w-4" />, permission: Permission.ANALYTICS_VIEW },
+  { href: "/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, requiresAdmin: true },
 ];
 
 export function GlobalNav() {
@@ -47,6 +52,20 @@ export function GlobalNav() {
   const session = useSession();
   const [mobileOpen, setMobileOpen] = useState(false);
   const user = session?.user;
+  const { hasPermission, isAdmin } = usePermissions();
+
+  // Filter navigation items based on permissions
+  const navItems = useMemo(() => {
+    return allNavItems.filter(item => {
+      if (item.permission && !hasPermission(item.permission)) {
+        return false;
+      }
+      if (item.requiresAdmin && !isAdmin()) {
+        return false;
+      }
+      return true;
+    });
+  }, [hasPermission, isAdmin]);
 
   const handleSignOut = async () => {
     await fetch("/api/auth/signout", { method: "POST" });
@@ -161,6 +180,14 @@ export function GlobalNav() {
                     Profile
                   </Link>
                 </DropdownMenuItem>
+                {isAdmin() && (
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings/workspace" className="flex items-center">
+                      <Shield className="mr-2 h-4 w-4" />
+                      Workspace Admin
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={openCommandPalette}>
                   <Command className="mr-2 h-4 w-4" />
                   Command Palette

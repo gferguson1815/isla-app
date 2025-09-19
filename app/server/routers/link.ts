@@ -3,8 +3,15 @@ import { router, protectedProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
 import { generateUniqueSlug, isValidSlug, sanitizeSlug } from '@/lib/utils/slug';
 import { appConfig, getShortUrl } from '@/lib/config/app';
+import {
+  Permission,
+  requirePermission,
+  requireLinkOwnership,
+  type ServerPermissionContext
+} from '@/lib/permissions/backend';
 
 const createLinkSchema = z.object({
+  workspaceId: z.string().uuid(),
   url: z.string().url(),
   slug: z.string().optional(),
   title: z.string().optional(),
@@ -14,6 +21,7 @@ const createLinkSchema = z.object({
 
 const updateLinkSchema = z.object({
   id: z.string().uuid(),
+  workspaceId: z.string().uuid(),
   url: z.string().url().optional(),
   title: z.string().optional(),
   description: z.string().optional(),
@@ -21,9 +29,30 @@ const updateLinkSchema = z.object({
   tags: z.array(z.string()).max(10).optional(),
 });
 
+const deleteLinkSchema = z.object({
+  id: z.string().uuid(),
+  workspaceId: z.string().uuid(),
+});
+
 const bulkMoveLinkSchema = z.object({
+  workspaceId: z.string().uuid(),
   link_ids: z.array(z.string().uuid()),
   folder_id: z.string().uuid().nullable(),
+});
+
+const bulkTagSchema = z.object({
+  workspaceId: z.string().uuid(),
+  linkIds: z.array(z.string().uuid()),
+  tags: z.array(z.string()).min(1).max(10),
+});
+
+const listLinksSchema = z.object({
+  workspaceId: z.string().uuid(),
+  limit: z.number().min(1).max(100).default(50),
+  offset: z.number().min(0).default(0),
+  tags: z.array(z.string()).optional(),
+  tagFilterMode: z.enum(['AND', 'OR']).default('AND').optional(),
+  search: z.string().optional(),
 });
 
 export const linkRouter = router({
@@ -33,44 +62,15 @@ export const linkRouter = router({
       const startTime = Date.now();
 
       try {
-        // Get user's workspace through membership
-        const membership = await ctx.prisma.workspace_memberships.findFirst({
-          where: { user_id: ctx.userId },
-          include: { workspaces: true },
-        });
+        // Check permission to create links in the workspace
+        const serverCtx: ServerPermissionContext = {
+          userId: ctx.userId,
+          prisma: ctx.prisma,
+        };
 
-        let workspaceId: string;
+        await requirePermission(serverCtx, input.workspaceId, Permission.LINKS_CREATE);
 
-        if (!membership) {
-          // Create default workspace and membership
-          const newWorkspace = await ctx.prisma.workspaces.create({
-            data: {
-              id: crypto.randomUUID(),
-              name: 'Default Workspace',
-              slug: `workspace-${ctx.userId.slice(0, 8)}`,
-              plan: 'free',
-              max_links: 50,
-              max_clicks: 5000,
-              max_users: 1,
-              created_at: new Date(),
-              updated_at: new Date(),
-            },
-          });
-
-          await ctx.prisma.workspace_memberships.create({
-            data: {
-              id: crypto.randomUUID(),
-              user_id: ctx.userId,
-              workspace_id: newWorkspace.id,
-              role: 'owner',
-              joined_at: new Date(),
-            },
-          });
-
-          workspaceId = newWorkspace.id;
-        } else {
-          workspaceId = membership.workspace_id;
-        }
+        const workspaceId = input.workspaceId;
 
         // Handle slug generation or validation
         let finalSlug: string;
@@ -145,12 +145,12 @@ export const linkRouter = router({
           data: {
             id: crypto.randomUUID(),
             workspace_id: workspaceId,
+            created_by: ctx.userId,
             url: input.url,
             slug: finalSlug,
             title: input.title || null,
             description: input.description || null,
             tags: processedTags,
-            created_by: ctx.userId,
             is_active: true,
             click_count: 0,
             created_at: new Date(),
@@ -179,31 +179,19 @@ export const linkRouter = router({
     }),
 
   list: protectedProcedure
-    .input(
-      z.object({
-        limit: z.number().min(1).max(100).default(50),
-        offset: z.number().min(0).default(0),
-        tags: z.array(z.string()).optional(),
-        tagFilterMode: z.enum(['AND', 'OR']).default('AND').optional(),
-        search: z.string().optional(),
-      })
-    )
+    .input(listLinksSchema)
     .query(async ({ ctx, input }) => {
-      // Get user's workspaces through memberships
-      const memberships = await ctx.prisma.workspace_memberships.findMany({
-        where: { user_id: ctx.userId },
-        select: { workspace_id: true },
-      });
+      // Check permission to view links in the workspace
+      const serverCtx: ServerPermissionContext = {
+        userId: ctx.userId,
+        prisma: ctx.prisma,
+      };
 
-      if (memberships.length === 0) {
-        return { links: [], total: 0 };
-      }
-
-      const workspaceIds = memberships.map(m => m.workspace_id);
+      await requirePermission(serverCtx, input.workspaceId, Permission.LINKS_VIEW);
 
       // Build where clause
       const where: any = {
-        workspace_id: { in: workspaceIds },
+        workspace_id: input.workspaceId,
       };
 
       // Add tag filters if provided
@@ -248,30 +236,17 @@ export const linkRouter = router({
     }),
 
   delete: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(deleteLinkSchema)
     .mutation(async ({ ctx, input }) => {
-      // Get the link to verify ownership
-      const link = await ctx.prisma.links.findUnique({
-        where: { id: input.id },
-        select: { workspace_id: true },
-      });
+      const serverCtx: ServerPermissionContext = {
+        userId: ctx.userId,
+        prisma: ctx.prisma,
+      };
 
-      if (!link) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Link not found',
-        });
-      }
+      // Check link ownership and delete permissions
+      const { link, canDelete } = await requireLinkOwnership(serverCtx, input.id, input.workspaceId);
 
-      // Check user has access to this workspace
-      const membership = await ctx.prisma.workspace_memberships.findFirst({
-        where: {
-          workspace_id: link.workspace_id,
-          user_id: ctx.userId,
-        },
-      });
-
-      if (!membership) {
+      if (!canDelete) {
         throw new TRPCError({
           code: 'FORBIDDEN',
           message: 'You do not have permission to delete this link',
@@ -289,28 +264,15 @@ export const linkRouter = router({
   update: protectedProcedure
     .input(updateLinkSchema)
     .mutation(async ({ ctx, input }) => {
-      // Verify ownership
-      const link = await ctx.prisma.links.findUnique({
-        where: { id: input.id },
-        select: { workspace_id: true },
-      });
+      const serverCtx: ServerPermissionContext = {
+        userId: ctx.userId,
+        prisma: ctx.prisma,
+      };
 
-      if (!link) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Link not found',
-        });
-      }
+      // Check link ownership and update permissions
+      const { link, canUpdate } = await requireLinkOwnership(serverCtx, input.id, input.workspaceId);
 
-      // Check user has access to this workspace
-      const membership = await ctx.prisma.workspace_memberships.findFirst({
-        where: {
-          workspace_id: link.workspace_id,
-          user_id: ctx.userId,
-        },
-      });
-
-      if (!membership) {
+      if (!canUpdate) {
         throw new TRPCError({
           code: 'FORBIDDEN',
           message: 'You do not have permission to update this link',
@@ -398,10 +360,23 @@ export const linkRouter = router({
     }),
 
   getBySlug: protectedProcedure
-    .input(z.object({ slug: z.string() }))
+    .input(z.object({
+      slug: z.string(),
+      workspaceId: z.string().uuid(),
+    }))
     .query(async ({ ctx, input }) => {
+      const serverCtx: ServerPermissionContext = {
+        userId: ctx.userId,
+        prisma: ctx.prisma,
+      };
+
+      // Check permission to view links in the workspace
+      await requirePermission(serverCtx, input.workspaceId, Permission.LINKS_VIEW);
+
       const link = await ctx.prisma.links.findUnique({
-        where: { slug: input.slug },
+        where: {
+          slug: input.slug,
+        },
       });
 
       if (!link) {
@@ -411,18 +386,11 @@ export const linkRouter = router({
         });
       }
 
-      // Verify user has access to workspace
-      const membership = await ctx.prisma.workspace_memberships.findFirst({
-        where: {
-          workspace_id: link.workspace_id,
-          user_id: ctx.userId,
-        },
-      });
-
-      if (!membership) {
+      // Verify link belongs to the specified workspace
+      if (link.workspace_id !== input.workspaceId) {
         throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'You do not have permission to view this link',
+          code: 'NOT_FOUND',
+          message: 'Link not found in this workspace',
         });
       }
 
@@ -435,10 +403,19 @@ export const linkRouter = router({
   bulkMove: protectedProcedure
     .input(bulkMoveLinkSchema)
     .mutation(async ({ ctx, input }) => {
-      // Get all links to verify they belong to the same workspace
+      const serverCtx: ServerPermissionContext = {
+        userId: ctx.userId,
+        prisma: ctx.prisma,
+      };
+
+      // Check permission for bulk operations
+      await requirePermission(serverCtx, input.workspaceId, Permission.LINKS_BULK_OPERATIONS);
+
+      // Get all links to verify they belong to the workspace
       const links = await ctx.prisma.links.findMany({
         where: {
-          id: { in: input.link_ids }
+          id: { in: input.link_ids },
+          workspace_id: input.workspaceId
         },
         select: { id: true, workspace_id: true }
       });
@@ -446,33 +423,14 @@ export const linkRouter = router({
       if (links.length === 0) {
         throw new TRPCError({
           code: 'NOT_FOUND',
-          message: 'No links found',
+          message: 'No links found in this workspace',
         });
       }
 
-      // Verify all links are from the same workspace
-      const workspaceIds = [...new Set(links.map(l => l.workspace_id))];
-      if (workspaceIds.length > 1) {
+      if (links.length !== input.link_ids.length) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: 'Links must belong to the same workspace',
-        });
-      }
-
-      const workspaceId = workspaceIds[0];
-
-      // Check user has access to this workspace
-      const membership = await ctx.prisma.workspace_memberships.findFirst({
-        where: {
-          workspace_id: workspaceId,
-          user_id: ctx.userId,
-        },
-      });
-
-      if (!membership) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'You do not have access to this workspace',
+          message: 'Some links do not belong to this workspace',
         });
       }
 
@@ -490,7 +448,7 @@ export const linkRouter = router({
           });
         }
 
-        if (folder.workspace_id !== workspaceId) {
+        if (folder.workspace_id !== input.workspaceId) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'Folder does not belong to the same workspace',
@@ -516,37 +474,29 @@ export const linkRouter = router({
     }),
 
   bulkAddTags: protectedProcedure
-    .input(z.object({
-      linkIds: z.array(z.string().uuid()),
-      tags: z.array(z.string()).min(1).max(10),
-    }))
+    .input(bulkTagSchema)
     .mutation(async ({ ctx, input }) => {
-      // Verify all links belong to user's workspaces
+      const serverCtx: ServerPermissionContext = {
+        userId: ctx.userId,
+        prisma: ctx.prisma,
+      };
+
+      // Check permission for bulk operations
+      await requirePermission(serverCtx, input.workspaceId, Permission.LINKS_BULK_OPERATIONS);
+
+      // Verify all links belong to the workspace
       const links = await ctx.prisma.links.findMany({
-        where: { id: { in: input.linkIds } },
+        where: {
+          id: { in: input.linkIds },
+          workspace_id: input.workspaceId
+        },
         select: { id: true, workspace_id: true, tags: true },
       });
 
       if (links.length !== input.linkIds.length) {
         throw new TRPCError({
           code: 'NOT_FOUND',
-          message: 'Some links not found',
-        });
-      }
-
-      // Check user has access to all workspaces
-      const workspaceIds = [...new Set(links.map(l => l.workspace_id))];
-      const memberships = await ctx.prisma.workspace_memberships.findMany({
-        where: {
-          workspace_id: { in: workspaceIds },
-          user_id: ctx.userId,
-        },
-      });
-
-      if (memberships.length !== workspaceIds.length) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'You do not have permission to modify some of these links',
+          message: 'Some links not found in this workspace',
         });
       }
 
@@ -595,37 +545,29 @@ export const linkRouter = router({
     }),
 
   bulkRemoveTags: protectedProcedure
-    .input(z.object({
-      linkIds: z.array(z.string().uuid()),
-      tags: z.array(z.string()).min(1),
-    }))
+    .input(bulkTagSchema)
     .mutation(async ({ ctx, input }) => {
-      // Verify all links belong to user's workspaces
+      const serverCtx: ServerPermissionContext = {
+        userId: ctx.userId,
+        prisma: ctx.prisma,
+      };
+
+      // Check permission for bulk operations
+      await requirePermission(serverCtx, input.workspaceId, Permission.LINKS_BULK_OPERATIONS);
+
+      // Verify all links belong to the workspace
       const links = await ctx.prisma.links.findMany({
-        where: { id: { in: input.linkIds } },
+        where: {
+          id: { in: input.linkIds },
+          workspace_id: input.workspaceId
+        },
         select: { id: true, workspace_id: true, tags: true },
       });
 
       if (links.length !== input.linkIds.length) {
         throw new TRPCError({
           code: 'NOT_FOUND',
-          message: 'Some links not found',
-        });
-      }
-
-      // Check user has access to all workspaces
-      const workspaceIds = [...new Set(links.map(l => l.workspace_id))];
-      const memberships = await ctx.prisma.workspace_memberships.findMany({
-        where: {
-          workspace_id: { in: workspaceIds },
-          user_id: ctx.userId,
-        },
-      });
-
-      if (memberships.length !== workspaceIds.length) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'You do not have permission to modify some of these links',
+          message: 'Some links not found in this workspace',
         });
       }
 

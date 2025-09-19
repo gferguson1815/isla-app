@@ -42,6 +42,9 @@ import { InviteMembersModal } from './invite-members-modal'
 import { TeamMembersList } from './team-members-list'
 import { PendingInvitationsList } from './pending-invitations-list'
 import { useAuth } from '@/contexts/auth-context'
+import { usePermissions } from '@/hooks/usePermissions'
+import { Permission } from '@/lib/permissions'
+import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import type { WorkspaceWithMembership } from '@/packages/shared/src/types/workspace'
 
 const updateWorkspaceSchema = z.object({
@@ -61,6 +64,7 @@ export function WorkspaceSettingsPage({ workspace }: WorkspaceSettingsPageProps)
   const [showInviteModal, setShowInviteModal] = useState(false)
   const { refreshWorkspaces } = useWorkspace()
   const { user } = useAuth()
+  const { hasPermission, isOwner: checkIsOwner } = usePermissions()
 
   const form = useForm<UpdateWorkspaceForm>({
     resolver: zodResolver(updateWorkspaceSchema),
@@ -113,8 +117,10 @@ export function WorkspaceSettingsPage({ workspace }: WorkspaceSettingsPageProps)
     })
   }
 
-  const isOwner = workspace.membership.role === 'owner'
-  const isAdmin = workspace.membership.role === 'admin' || isOwner
+  const canUpdateWorkspace = hasPermission(Permission.WORKSPACE_UPDATE)
+  const canInviteMembers = hasPermission(Permission.MEMBERS_INVITE)
+  const canDeleteWorkspace = hasPermission(Permission.WORKSPACE_DELETE)
+  const isOwner = checkIsOwner()
 
   return (
     <div className="space-y-6">
@@ -147,7 +153,7 @@ export function WorkspaceSettingsPage({ workspace }: WorkspaceSettingsPageProps)
                       <Input
                         placeholder="My Awesome Workspace"
                         {...field}
-                        disabled={!isAdmin}
+                        disabled={!canUpdateWorkspace}
                       />
                     </FormControl>
                     <FormDescription>
@@ -168,7 +174,7 @@ export function WorkspaceSettingsPage({ workspace }: WorkspaceSettingsPageProps)
                       <Input
                         placeholder="links.yourdomain.com"
                         {...field}
-                        disabled={!isAdmin}
+                        disabled={!canUpdateWorkspace}
                       />
                     </FormControl>
                     <FormDescription>
@@ -179,7 +185,7 @@ export function WorkspaceSettingsPage({ workspace }: WorkspaceSettingsPageProps)
                 )}
               />
 
-              {isAdmin && (
+              {canUpdateWorkspace && (
                 <Button type="submit" disabled={isSubmitting}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   <Save className="mr-2 h-4 w-4" />
@@ -241,7 +247,7 @@ export function WorkspaceSettingsPage({ workspace }: WorkspaceSettingsPageProps)
               <Users className="h-5 w-5" />
               Team Management
             </span>
-            {isAdmin && (
+            {canInviteMembers && (
               <Button
                 onClick={() => setShowInviteModal(true)}
                 size="sm"
@@ -261,7 +267,7 @@ export function WorkspaceSettingsPage({ workspace }: WorkspaceSettingsPageProps)
             currentUserRole={workspace.membership.role}
             currentUserId={user?.id || ''}
           />
-          {isAdmin && (
+          {canInviteMembers && (
             <PendingInvitationsList workspaceId={workspace.id} />
           )}
         </CardContent>
@@ -305,7 +311,7 @@ export function WorkspaceSettingsPage({ workspace }: WorkspaceSettingsPageProps)
       </Card>
 
       {/* Danger Zone */}
-      {isOwner && (
+      {canDeleteWorkspace && (
         <Card className="border-red-200">
           <CardHeader>
             <CardTitle className="text-red-600">Danger Zone</CardTitle>
