@@ -187,6 +187,10 @@ model workspaces {
   utm_templates          utm_templates[]
   workspace_invitations  workspace_invitations[]
   workspace_memberships  workspace_memberships[]
+  subscriptions          subscriptions?
+  usage_metrics          usage_metrics[]
+  invoices               invoices[]
+  payment_methods        payment_methods[]
 
   @@index([slug])
   @@index([deleted_at])
@@ -252,4 +256,88 @@ model audit_logs {
   @@index([action])
   @@index([created_at(sort: Desc)])
   @@index([entity_type, entity_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model subscriptions {
+  id                     String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id           String     @unique @db.Uuid
+  stripe_subscription_id String     @unique
+  stripe_price_id        String
+  status                 String
+  current_period_start   DateTime   @db.Timestamptz(6)
+  current_period_end     DateTime   @db.Timestamptz(6)
+  cancel_at_period_end   Boolean    @default(false)
+  canceled_at            DateTime?  @db.Timestamptz(6)
+  trial_start            DateTime?  @db.Timestamptz(6)
+  trial_end              DateTime?  @db.Timestamptz(6)
+  created_at             DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime   @default(now()) @db.Timestamptz(6)
+  workspaces             workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@index([workspace_id])
+  @@index([status])
+  @@index([current_period_end])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model usage_metrics {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id String     @db.Uuid
+  metric_type  String     @db.VarChar(50) // 'links', 'clicks', 'users'
+  value        Int        @default(0)
+  period       String     @db.VarChar(20) // 'daily', 'monthly', 'lifetime'
+  period_start DateTime   @db.Timestamptz(6)
+  period_end   DateTime   @db.Timestamptz(6)
+  created_at   DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime   @default(now()) @db.Timestamptz(6)
+  workspaces   workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@unique([workspace_id, metric_type, period, period_start], map: "unique_workspace_metric_period")
+  @@index([workspace_id])
+  @@index([metric_type])
+  @@index([period_start, period_end])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model invoices {
+  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id      String     @db.Uuid
+  stripe_invoice_id String     @unique
+  invoice_number    String?
+  amount_due        Int        // In cents
+  amount_paid       Int        // In cents
+  amount_remaining  Int        @default(0) // In cents
+  currency          String     @default("usd") @db.VarChar(3)
+  status            String     @db.VarChar(50) // 'draft', 'open', 'paid', 'void', 'uncollectible'
+  due_date          DateTime?  @db.Timestamptz(6)
+  paid_at           DateTime?  @db.Timestamptz(6)
+  invoice_pdf       String?    // URL to PDF
+  hosted_invoice_url String?   // Stripe hosted invoice page
+  created_at        DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime   @default(now()) @db.Timestamptz(6)
+  workspaces        workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@index([workspace_id])
+  @@index([status])
+  @@index([due_date])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model payment_methods {
+  id                       String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id             String     @db.Uuid
+  stripe_payment_method_id String     @unique
+  type                     String     @db.VarChar(20) // 'card', 'bank_account', etc.
+  card_brand               String?    @db.VarChar(20) // 'visa', 'mastercard', 'amex', etc.
+  card_last4               String?    @db.VarChar(4)
+  card_exp_month           Int?
+  card_exp_year            Int?
+  is_default               Boolean    @default(false)
+  created_at               DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime   @default(now()) @db.Timestamptz(6)
+  workspaces               workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@index([workspace_id])
+  @@index([is_default])
 }
