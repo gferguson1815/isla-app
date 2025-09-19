@@ -150,6 +150,7 @@ export const linkRouter = router({
             title: input.title || null,
             description: input.description || null,
             tags: processedTags,
+            created_by: ctx.userId,
             is_active: true,
             click_count: 0,
             created_at: new Date(),
@@ -663,5 +664,444 @@ export const linkRouter = router({
       });
 
       return { success: true, count: links.length };
+    }),
+
+  getImportHistory: protectedProcedure
+    .input(z.object({
+      workspaceId: z.string().uuid(),
+    }))
+    .query(async ({ ctx, input }) => {
+      // Verify user has access to workspace
+      const membership = await ctx.prisma.workspace_memberships.findFirst({
+        where: {
+          workspace_id: input.workspaceId,
+          user_id: ctx.userId,
+        },
+      });
+
+      if (!membership) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You do not have permission to view import history for this workspace',
+        });
+      }
+
+      const imports = await ctx.prisma.link_imports.findMany({
+        where: {
+          workspace_id: input.workspaceId,
+        },
+        orderBy: {
+          created_at: 'desc',
+        },
+        take: 50,
+      });
+
+      // Get user details for each import
+      const userIds = [...new Set(imports.map(i => i.created_by))];
+      const users = await ctx.prisma.users.findMany({
+        where: {
+          id: { in: userIds },
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      });
+
+      const userMap = new Map(users.map(u => [u.id, u]));
+
+      return imports.map(imp => ({
+        id: imp.id,
+        fileName: imp.file_name,
+        totalRows: imp.total_rows,
+        successCount: imp.success_count,
+        errorCount: imp.error_count,
+        status: imp.status as "processing" | "completed" | "partial" | "failed",
+        createdAt: imp.created_at,
+        createdBy: userMap.get(imp.created_by) || {
+          email: 'unknown',
+          name: null,
+        },
+      }));
+    }),
+
+  validateCsvFile: protectedProcedure
+    .input(z.object({
+      fileName: z.string(),
+      fileType: z.string(),
+      fileSize: z.number(),
+      firstBytes: z.string().optional(), // Base64 encoded first 512 bytes for MIME checking
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Validate file size (5MB limit)
+      const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+      if (input.fileSize > MAX_FILE_SIZE) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'File size exceeds 5MB limit',
+        });
+      }
+
+      // Validate file extension
+      if (!input.fileName.toLowerCase().endsWith('.csv')) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Only CSV files are allowed',
+        });
+      }
+
+      // Validate MIME type
+      const allowedMimeTypes = [
+        'text/csv',
+        'text/plain',
+        'application/csv',
+        'application/vnd.ms-excel',
+      ];
+
+      if (!allowedMimeTypes.includes(input.fileType)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Invalid file type. Only CSV files are allowed',
+        });
+      }
+
+      // Additional check using file magic bytes if provided
+      if (input.firstBytes) {
+        const bytes = Buffer.from(input.firstBytes, 'base64');
+        // CSV files typically start with printable ASCII characters
+        // Check if first bytes are reasonable for CSV
+        const isLikelyText = bytes.every(byte => 
+          (byte >= 0x20 && byte <= 0x7E) || // Printable ASCII
+          byte === 0x09 || // Tab
+          byte === 0x0A || // Line feed
+          byte === 0x0D    // Carriage return
+        );
+
+        if (!isLikelyText) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'File content does not appear to be valid CSV',
+          });
+        }
+      }
+
+      return { valid: true };
+    }),
+
+  bulkImportCsv: protectedProcedure
+    .input(z.object({
+      workspaceId: z.string().uuid(),
+      links: z.array(z.object({
+        url: z.string().url(),
+        slug: z.string().optional(),
+        title: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        folderId: z.string().uuid().optional(),
+      })),
+      importId: z.string().uuid(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify user has access to workspace
+      const membership = await ctx.prisma.workspace_memberships.findFirst({
+        where: {
+          workspace_id: input.workspaceId,
+          user_id: ctx.userId,
+        },
+        include: {
+          workspaces: true,
+        },
+      });
+
+      if (!membership) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You do not have permission to import links to this workspace',
+        });
+      }
+
+      const workspace = membership.workspaces;
+
+      // Check plan limits
+      const currentLinkCount = await ctx.prisma.links.count({
+        where: { workspace_id: input.workspaceId },
+      });
+
+      const planLimits = {
+        free: 10,
+        starter: 100,
+        growth: 1000,
+      };
+
+      const maxImportSize = planLimits[workspace.plan as keyof typeof planLimits] || 10;
+      const remainingQuota = workspace.max_links - currentLinkCount;
+
+      if (input.links.length > maxImportSize) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: `Your ${workspace.plan} plan allows importing up to ${maxImportSize} links at once`,
+        });
+      }
+
+      if (input.links.length > remainingQuota) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: `Importing ${input.links.length} links would exceed your workspace limit of ${workspace.max_links} links`,
+        });
+      }
+
+      // Process links in batches
+      const batchSize = 10;
+      const results = {
+        successful: 0,
+        failed: 0,
+        errors: [] as Array<{ index: number; error: string }>,
+      };
+
+      // Get existing slugs for duplicate checking
+      const existingSlugs = await ctx.prisma.links.findMany({
+        where: { workspace_id: input.workspaceId },
+        select: { slug: true },
+      });
+      const existingSlugSet = new Set(existingSlugs.map(l => l.slug));
+
+      // Process in transaction with timeout and rollback on failure
+      const TRANSACTION_TIMEOUT = 30000; // 30 seconds timeout
+      
+      try {
+        await ctx.prisma.$transaction(async (tx) => {
+        // Create import record
+        await tx.link_imports.create({
+          data: {
+            id: input.importId,
+            workspace_id: input.workspaceId,
+            file_name: 'csv_import',
+            total_rows: input.links.length,
+            success_count: 0,
+            error_count: 0,
+            status: 'processing',
+            created_by: ctx.userId,
+            created_at: new Date(),
+          },
+        });
+
+        for (let i = 0; i < input.links.length; i += batchSize) {
+          const batch = input.links.slice(i, Math.min(i + batchSize, input.links.length));
+          
+          for (const [index, linkData] of batch.entries()) {
+            const globalIndex = i + index;
+            
+            try {
+              let finalSlug: string;
+
+              if (linkData.slug) {
+                const sanitized = sanitizeSlug(linkData.slug);
+                if (!sanitized || !isValidSlug(sanitized)) {
+                  throw new Error('Invalid slug format');
+                }
+
+                if (existingSlugSet.has(sanitized)) {
+                  throw new Error('Slug already exists');
+                }
+
+                finalSlug = sanitized;
+                existingSlugSet.add(finalSlug);
+              } else {
+                // Generate unique slug with proper uniqueness check
+                finalSlug = await generateUniqueSlug(async (slug: string) => {
+                  // Check if slug already exists in database or in current import batch
+                  if (existingSlugSet.has(slug)) {
+                    return false;
+                  }
+                  
+                  const existing = await tx.links.findFirst({
+                    where: {
+                      workspace_id: input.workspaceId,
+                      slug: slug,
+                    },
+                  });
+                  
+                  return !existing;
+                });
+                existingSlugSet.add(finalSlug);
+              }
+
+              // Handle folder lookup if provided
+              let folderId = null;
+              if (linkData.folderId) {
+                const folder = await tx.folders.findFirst({
+                  where: {
+                    id: linkData.folderId,
+                    workspace_id: input.workspaceId,
+                  },
+                });
+                if (folder) {
+                  folderId = folder.id;
+                }
+              }
+
+              // Create the link
+              const newLink = await tx.links.create({
+                data: {
+                  id: crypto.randomUUID(),
+                  workspace_id: input.workspaceId,
+                  url: linkData.url,
+                  slug: finalSlug,
+                  title: linkData.title || null,
+                  folder_id: folderId,
+                  tags: linkData.tags || [],
+                  import_id: input.importId,
+                  created_by: ctx.userId,
+                  created_at: new Date(),
+                  updated_at: new Date(),
+                },
+              });
+
+              // Update tag usage counts
+              if (linkData.tags && linkData.tags.length > 0) {
+                for (const tagName of linkData.tags) {
+                  const normalizedTag = tagName.toLowerCase();
+                  const existingTag = await tx.tags.findUnique({
+                    where: {
+                      workspace_id_name: {
+                        workspace_id: input.workspaceId,
+                        name: normalizedTag,
+                      },
+                    },
+                  });
+
+                  if (!existingTag) {
+                    await tx.tags.create({
+                      data: {
+                        workspace_id: input.workspaceId,
+                        name: normalizedTag,
+                        usage_count: 1,
+                      },
+                    });
+                  } else {
+                    await tx.tags.update({
+                      where: { id: existingTag.id },
+                      data: { usage_count: { increment: 1 } },
+                    });
+                  }
+                }
+              }
+
+              results.successful++;
+            } catch (error) {
+              results.failed++;
+              results.errors.push({
+                index: globalIndex,
+                error: error instanceof Error ? error.message : 'Unknown error',
+              });
+            }
+          }
+        }
+
+        // Update import record with results
+        await tx.link_imports.update({
+          where: { id: input.importId },
+          data: {
+            success_count: results.successful,
+            error_count: results.failed,
+            status: results.failed === 0 ? 'completed' : 'partial',
+          },
+        });
+      }, {
+        timeout: TRANSACTION_TIMEOUT,
+        maxWait: 5000, // Max time to wait for connection from pool
+      });
+    } catch (error) {
+      // On transaction failure, mark import as failed
+      try {
+        await ctx.prisma.link_imports.update({
+          where: { id: input.importId },
+          data: {
+            status: 'failed',
+            error_count: input.links.length,
+          },
+        });
+      } catch (updateError) {
+        // Log but don't throw if we can't update the import record
+        console.error('Failed to update import status:', updateError);
+      }
+      
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
+    }
+
+      return results;
+    }),
+
+  undoImport: protectedProcedure
+    .input(z.object({
+      workspaceId: z.string().uuid(),
+      importId: z.string().uuid(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify user has access to workspace
+      const membership = await ctx.prisma.workspace_memberships.findFirst({
+        where: {
+          workspace_id: input.workspaceId,
+          user_id: ctx.userId,
+        },
+      });
+
+      if (!membership) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You do not have permission to undo imports in this workspace',
+        });
+      }
+
+      // Check if import exists and was created recently (within 5 minutes)
+      const importRecord = await ctx.prisma.link_imports.findFirst({
+        where: {
+          id: input.importId,
+          workspace_id: input.workspaceId,
+        },
+      });
+
+      if (!importRecord) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Import not found',
+        });
+      }
+
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      if (importRecord.created_at < fiveMinutesAgo) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Undo window has expired (5 minutes)',
+        });
+      }
+
+      // Soft delete all links from this import
+      const result = await ctx.prisma.links.updateMany({
+        where: {
+          import_id: input.importId,
+          workspace_id: input.workspaceId,
+          deleted_at: null, // Only undo non-deleted links
+        },
+        data: {
+          deleted_at: new Date(),
+        },
+      });
+
+      // Update import record to mark as undone
+      await ctx.prisma.link_imports.update({
+        where: { id: input.importId },
+        data: {
+          status: 'undone',
+        },
+      });
+
+      return {
+        success: true,
+        undoneCount: result.count,
+      };
     }),
 });
