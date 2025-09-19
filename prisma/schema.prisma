@@ -124,13 +124,18 @@ model links {
   android_url             String?
   enable_geolocation      Boolean                @default(false)
   enable_device_targeting Boolean                @default(false)
+  tags                    String[]               @default([])
+  created_by              String                 @db.Uuid
+  import_id               String?                @db.Uuid
   created_at              DateTime               @default(now()) @db.Timestamptz(6)
   updated_at              DateTime               @db.Timestamptz(6)
+  deleted_at              DateTime?              @db.Timestamptz(6)
   analytics_aggregates    analytics_aggregates[]
   click_events            click_events[]
   campaigns               campaigns?             @relation(fields: [campaign_id], references: [id])
   folders                 folders?               @relation(fields: [folder_id], references: [id])
   workspaces              workspaces             @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  link_imports            link_imports?          @relation(fields: [import_id], references: [id], onDelete: SetNull)
   users                   users                  @relation(fields: [created_by], references: [id])
 
   @@index([campaign_id])
@@ -197,6 +202,7 @@ model workspaces {
   usage_metrics          usage_metrics[]
   invoices               invoices[]
   payment_methods        payment_methods[]
+  link_imports           link_imports[]
   tags                   tags[]
 
   @@index([slug])
@@ -350,6 +356,23 @@ model payment_methods {
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model link_imports {
+  id            String     @id @db.Uuid
+  workspace_id  String     @db.Uuid
+  file_name     String
+  total_rows    Int
+  success_count Int
+  error_count   Int
+  status        String     @db.VarChar(20) // processing, completed, partial, failed, undone
+  created_by    String     @db.Uuid
+  created_at    DateTime   @default(now()) @db.Timestamptz(6)
+  links         links[]
+  workspaces    workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@index([workspace_id])
+  @@index([created_at])
+}
+
 model tags {
   id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   workspace_id String     @db.Uuid
