@@ -5,3 +5,6 @@ export interface BaseEntity {
 }
 
 export * from './utm';
+export * from './workspace';
+export * from './folder';
+export * from './tag';

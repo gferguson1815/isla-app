@@ -1,21 +1,11 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useAuth } from './auth-context'
+import { trpc } from '@/lib/trpc/client'
+import type { WorkspaceWithMembership } from '@/packages/shared/src/types/workspace'
 
-interface Workspace {
-  id: string
-  name: string
-  slug: string
-  domain: string | null
-  plan: string
-  max_links: number
-  max_clicks: number
-  max_users: number
-  created_at: string
-  updated_at: string
-}
+type Workspace = WorkspaceWithMembership
 
 interface WorkspaceContextType {
   currentWorkspace: Workspace | null
@@ -51,7 +41,32 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { user } = useAuth()
-  const supabase = createClient()
+
+  const workspacesQuery = trpc.workspace.list.useQuery(undefined, {
+    enabled: !!user,
+    onSuccess: (data) => {
+      setWorkspaces(data)
+      setError(null)
+
+      // Select workspace based on saved preference or first available
+      const savedWorkspaceId = localStorage.getItem(SELECTED_WORKSPACE_KEY)
+
+      if (savedWorkspaceId && data.find(w => w.id === savedWorkspaceId)) {
+        setCurrentWorkspace(data.find(w => w.id === savedWorkspaceId)!)
+      } else if (data.length > 0) {
+        setCurrentWorkspace(data[0])
+        localStorage.setItem(SELECTED_WORKSPACE_KEY, data[0].id)
+      } else {
+        setCurrentWorkspace(null)
+      }
+      setLoading(false)
+    },
+    onError: (err) => {
+      console.error('Error fetching workspaces:', err)
+      setError(err.message || 'Failed to fetch workspaces')
+      setLoading(false)
+    },
+  })
 
   const fetchWorkspaces = useCallback(async () => {
     if (!user) {
@@ -61,57 +76,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
-    try {
-      setError(null)
-
-      // Fetch workspaces the user is a member of
-      const { data: memberships, error: membershipError } = await supabase
-        .from('workspace_memberships')
-        .select(`
-          workspace_id,
-          role,
-          workspaces (
-            id,
-            name,
-            slug,
-            domain,
-            plan,
-            max_links,
-            max_clicks,
-            max_users,
-            created_at,
-            updated_at
-          )
-        `)
-        .eq('user_id', user.id)
-
-      if (membershipError) throw membershipError
-
-      const userWorkspaces = memberships
-        ?.map(m => m.workspaces)
-        .filter(w => w !== null) as Workspace[] || []
-
-      setWorkspaces(userWorkspaces)
-
-      // Select workspace based on saved preference or first available
-      const savedWorkspaceId = localStorage.getItem(SELECTED_WORKSPACE_KEY)
-
-      if (savedWorkspaceId && userWorkspaces.find(w => w.id === savedWorkspaceId)) {
-        setCurrentWorkspace(userWorkspaces.find(w => w.id === savedWorkspaceId)!)
-      } else if (userWorkspaces.length > 0) {
-        setCurrentWorkspace(userWorkspaces[0])
-        localStorage.setItem(SELECTED_WORKSPACE_KEY, userWorkspaces[0].id)
-      } else {
-        // No workspaces available - might need to create a default one
-        setCurrentWorkspace(null)
-      }
-    } catch (err) {
-      console.error('Error fetching workspaces:', err)
-      setError(err instanceof Error ? err.message : 'Failed to fetch workspaces')
-    } finally {
-      setLoading(false)
-    }
-  }, [user, supabase])
+    setLoading(true)
+    await workspacesQuery.refetch()
+  }, [user, workspacesQuery])
 
   const selectWorkspace = useCallback((workspaceId: string) => {
     const workspace = workspaces.find(w => w.id === workspaceId)
@@ -123,12 +90,16 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
   const refreshWorkspaces = useCallback(async () => {
     setLoading(true)
-    await fetchWorkspaces()
-  }, [fetchWorkspaces])
+    await workspacesQuery.refetch()
+  }, [workspacesQuery])
 
   useEffect(() => {
-    fetchWorkspaces()
-  }, [fetchWorkspaces])
+    if (!user) {
+      setWorkspaces([])
+      setCurrentWorkspace(null)
+      setLoading(false)
+    }
+  }, [user])
 
   return (
     <WorkspaceContext.Provider

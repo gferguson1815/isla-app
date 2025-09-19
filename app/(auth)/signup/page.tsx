@@ -22,21 +22,22 @@ export default function SignUpPage() {
     setMessage(null)
 
     try {
-      const response = await fetch('/api/auth/send-magic-link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+      // Use Supabase's built-in magic link (OTP)
+      const { data, error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/confirm`,
+          shouldCreateUser: true, // Create user if doesn't exist
+        },
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setMessage({ type: 'error', text: data.error })
+      if (error) {
+        setMessage({ type: 'error', text: error.message })
       } else {
-        setMessage({ type: 'success', text: 'Check your email to confirm your account!' })
+        setMessage({ type: 'success', text: 'Check your email for the magic link!' })
       }
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to send confirmation email. Please try again.' })
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Failed to send magic link. Please try again.' })
     }
 
     setLoading(false)
@@ -134,7 +135,7 @@ export default function SignUpPage() {
               ) : (
                 <Mail className="mr-2 h-4 w-4" />
               )}
-              Create account with email
+              Continue with magic link
             </Button>
           </form>
         </CardContent>

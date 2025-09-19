@@ -46,6 +46,26 @@ export const authRateLimiter = {
     : null,
 }
 
+export const workspaceRateLimiter = {
+  invitations: ratelimit
+    ? new Ratelimit({
+        redis: redis!,
+        limiter: Ratelimit.slidingWindow(20, '1 h'), // Max 20 invitation batches per hour
+        analytics: true,
+        prefix: 'workspace:invitations',
+      })
+    : null,
+
+  creation: ratelimit
+    ? new Ratelimit({
+        redis: redis!,
+        limiter: Ratelimit.slidingWindow(5, '1 h'), // Max 5 workspaces per hour
+        analytics: true,
+        prefix: 'workspace:creation',
+      })
+    : null,
+}
+
 export async function checkRateLimit(
   identifier: string,
   limiter: Ratelimit | null

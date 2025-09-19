@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useWorkspace } from '@/contexts/workspace-context'
 import {
   Select,
@@ -8,10 +9,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Building2, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Building2, Loader2, Plus } from 'lucide-react'
+import { WorkspaceCreationModal } from '@/components/workspace/workspace-creation-modal'
 
 export function WorkspaceSelector() {
-  const { currentWorkspace, workspaces, loading, error, selectWorkspace } = useWorkspace()
+  const { currentWorkspace, workspaces, loading, error, selectWorkspace, refreshWorkspaces } = useWorkspace()
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   if (loading) {
     return (
@@ -32,8 +36,22 @@ export function WorkspaceSelector() {
 
   if (workspaces.length === 0) {
     return (
-      <div className="text-sm text-muted-foreground">
-        No workspaces available
+      <div className="flex items-center gap-2">
+        <div className="text-sm text-muted-foreground">
+          No workspaces available
+        </div>
+        <Button
+          size="sm"
+          onClick={() => setShowCreateModal(true)}
+        >
+          <Plus className="h-4 w-4 mr-1" />
+          Create Workspace
+        </Button>
+        <WorkspaceCreationModal
+          open={showCreateModal}
+          onOpenChange={setShowCreateModal}
+          onSuccess={refreshWorkspaces}
+        />
       </div>
     )
   }
@@ -61,8 +79,25 @@ export function WorkspaceSelector() {
               </div>
             </SelectItem>
           ))}
+          <div className="border-t mt-1 pt-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start"
+              onClick={() => setShowCreateModal(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create New Workspace
+            </Button>
+          </div>
         </SelectContent>
       </Select>
+
+      <WorkspaceCreationModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
+        onSuccess={refreshWorkspaces}
+      />
     </div>
   )
 }
