@@ -32,7 +32,8 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.text();
-  const signature = headers().get('stripe-signature')!;
+  const hdrs = await headers();
+  const signature = hdrs.get('stripe-signature')!;
 
   let event: Stripe.Event;
 
@@ -143,8 +144,8 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
         stripe_subscription_id: subscription.id,
         stripe_price_id: subscription.items.data[0].price.id,
         status: subscription.status,
-        current_period_start: new Date(subscription.current_period_start * 1000),
-        current_period_end: new Date(subscription.current_period_end * 1000),
+        current_period_start: new Date((subscription as any).current_period_start * 1000),
+        current_period_end: new Date((subscription as any).current_period_end * 1000),
         cancel_at_period_end: subscription.cancel_at_period_end,
         canceled_at: subscription.canceled_at 
           ? new Date(subscription.canceled_at * 1000) 
@@ -189,8 +190,8 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       data: {
         stripe_price_id: subscription.items.data[0].price.id,
         status: subscription.status,
-        current_period_start: new Date(subscription.current_period_start * 1000),
-        current_period_end: new Date(subscription.current_period_end * 1000),
+        current_period_start: new Date((subscription as any).current_period_start * 1000),
+        current_period_end: new Date((subscription as any).current_period_end * 1000),
         cancel_at_period_end: subscription.cancel_at_period_end,
         canceled_at: subscription.canceled_at 
           ? new Date(subscription.canceled_at * 1000) 
@@ -248,10 +249,10 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
 }
 
 async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
-  if (!invoice.subscription) return;
+  if (!(invoice as any).subscription) return;
   
   const subscription = await stripe.subscriptions.retrieve(
-    invoice.subscription as string
+    (invoice as any).subscription as string
   );
   const workspaceId = subscription.metadata.workspace_id;
   
@@ -266,7 +267,7 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
     create: {
       workspace_id: workspaceId,
       stripe_invoice_id: invoice.id,
-      invoice_number: invoice.number,
+      invoice_number: invoice.number || null,
       amount_due: invoice.amount_due,
       amount_paid: invoice.amount_paid,
       amount_remaining: invoice.amount_remaining,
@@ -299,8 +300,8 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
       metric_type: 'payment',
       value: invoice.amount_paid,
       period: 'monthly',
-      period_start: new Date(subscription.current_period_start * 1000),
-      period_end: new Date(subscription.current_period_end * 1000),
+      period_start: new Date((subscription as any).current_period_start * 1000),
+      period_end: new Date((subscription as any).current_period_end * 1000),
     },
   });
 
@@ -308,10 +309,10 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
 }
 
 async function handlePaymentFailed(invoice: Stripe.Invoice) {
-  if (!invoice.subscription) return;
+  if (!(invoice as any).subscription) return;
   
   const subscription = await stripe.subscriptions.retrieve(
-    invoice.subscription as string
+    (invoice as any).subscription as string
   );
   const workspaceId = subscription.metadata.workspace_id;
   
@@ -326,7 +327,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
     create: {
       workspace_id: workspaceId,
       stripe_invoice_id: invoice.id,
-      invoice_number: invoice.number,
+      invoice_number: invoice.number || null,
       amount_due: invoice.amount_due,
       amount_paid: invoice.amount_paid,
       amount_remaining: invoice.amount_remaining,
