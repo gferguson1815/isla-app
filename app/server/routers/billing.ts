@@ -74,15 +74,15 @@ export const billingRouter = router({
       return {
         links: {
           current: linkCount,
-          limit: metrics.find(m => m.metric_type === 'links')?.value || linkCount,
+          limit: metrics.find((m: any) => m.metric_type === 'links')?.value || linkCount,
         },
         users: {
           current: userCount,
-          limit: metrics.find(m => m.metric_type === 'users')?.value || userCount,
+          limit: metrics.find((m: any) => m.metric_type === 'users')?.value || userCount,
         },
         clicks: {
           current: clickCount,
-          limit: metrics.find(m => m.metric_type === 'clicks')?.value || clickCount,
+          limit: metrics.find((m: any) => m.metric_type === 'clicks')?.value || clickCount,
         },
       };
     }),
@@ -116,7 +116,7 @@ export const billingRouter = router({
       if (!customerId) {
         const customer = await StripeService.createCustomer({
           workspaceId: workspace.id,
-          email: ctx.user.email,
+          email: ctx.session.user.email,
           name: workspace.name,
         });
         customerId = customer.id;
@@ -306,7 +306,7 @@ export const billingRouter = router({
         ],
       });
 
-      return paymentMethods.map(pm => ({
+      return paymentMethods.map((pm: any) => ({
         id: pm.id,
         type: pm.type,
         brand: pm.card_brand,

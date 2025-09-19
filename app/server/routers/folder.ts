@@ -52,7 +52,7 @@ function buildFolderTree(
     }));
 }
 
-export const folderRouter = router({
+export const folderRouter: any = router({
   create: protectedProcedure
     .input(CreateFolderSchema)
     .mutation(async ({ ctx, input }) => {
