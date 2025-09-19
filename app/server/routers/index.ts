@@ -6,6 +6,7 @@ import { workspaceRouter } from './workspace';
 import { userRouter } from './user';
 import { folderRouter } from './folder';
 import { tagRouter } from './tag';
+import { billingRouter } from './billing';
 
 export const appRouter = router({
   link: linkRouter,
@@ -15,6 +16,7 @@ export const appRouter = router({
   user: userRouter,
   folder: folderRouter,
   tag: tagRouter,
+  billing: billingRouter,
 });
 
 export type AppRouter = typeof appRouter;

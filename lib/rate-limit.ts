@@ -66,6 +66,17 @@ export const workspaceRateLimiter = {
     : null,
 }
 
+export const webhookRateLimiter = {
+  stripe: ratelimit
+    ? new Ratelimit({
+        redis: redis!,
+        limiter: Ratelimit.slidingWindow(100, '1 m'), // Max 100 webhook events per minute
+        analytics: true,
+        prefix: 'webhook:stripe',
+      })
+    : null,
+}
+
 export async function checkRateLimit(
   identifier: string,
   limiter: Ratelimit | null
