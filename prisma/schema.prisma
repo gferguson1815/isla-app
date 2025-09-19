@@ -99,6 +99,7 @@ model folders {
 model links {
   id                      String                 @id @db.Uuid
   workspace_id            String                 @db.Uuid
+  created_by              String                 @db.Uuid
   folder_id               String?                @db.Uuid
   campaign_id             String?                @db.Uuid
   slug                    String                 @unique
@@ -113,6 +114,7 @@ model links {
   click_limit             Int?
   click_count             Int                    @default(0)
   last_clicked_at         DateTime?              @db.Timestamptz(6)
+  tags                    String[]               @default([])
   utm_source              String?
   utm_medium              String?
   utm_campaign            String?
@@ -129,8 +131,10 @@ model links {
   campaigns               campaigns?             @relation(fields: [campaign_id], references: [id])
   folders                 folders?               @relation(fields: [folder_id], references: [id])
   workspaces              workspaces             @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  users                   users                  @relation(fields: [created_by], references: [id])
 
   @@index([campaign_id])
+  @@index([created_by])
   @@index([folder_id])
   @@index([slug])
   @@index([workspace_id])
@@ -146,6 +150,7 @@ model users {
   created_at            DateTime                @default(now()) @db.Timestamptz(6)
   updated_at            DateTime                @db.Timestamptz(6)
   audit_logs            audit_logs[]
+  links                 links[]
   workspace_invitations workspace_invitations[]
   workspace_memberships workspace_memberships[]
 }
@@ -191,6 +196,7 @@ model workspaces {
   usage_metrics          usage_metrics[]
   invoices               invoices[]
   payment_methods        payment_methods[]
+  tags                   tags[]
 
   @@index([slug])
   @@index([deleted_at])
@@ -340,4 +346,19 @@ model payment_methods {
 
   @@index([workspace_id])
   @@index([is_default])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model tags {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id String     @db.Uuid
+  name         String     @db.VarChar(50)
+  usage_count  Int        @default(0)
+  created_at   DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime   @default(now()) @db.Timestamptz(6)
+  workspaces   workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@unique([workspace_id, name], map: "workspace_id_name")
+  @@index([workspace_id])
+  @@index([name])
 }

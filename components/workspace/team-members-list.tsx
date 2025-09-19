@@ -52,6 +52,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/trpc/client';
 import type { WorkspaceRole } from '@/packages/shared/src/types/workspace';
+import { usePermissions } from '@/hooks/usePermissions';
+import { Permission } from '@/lib/permissions';
 
 interface TeamMembersListProps {
   workspaceId: string;
@@ -166,8 +168,12 @@ export function TeamMembersList({
     return email?.slice(0, 2).toUpperCase() || 'U';
   };
 
-  const canManageMembers = currentUserRole === 'owner' || currentUserRole === 'admin';
-  const canChangeRoles = currentUserRole === 'owner';
+  const permissions = usePermissions();
+  const canManageMembers = permissions.hasPermission(Permission.MEMBERS_INVITE) ||
+                          permissions.hasPermission(Permission.MEMBERS_REMOVE);
+  const canChangeRoles = permissions.hasPermission(Permission.MEMBERS_UPDATE_ROLE);
+  const canRemoveMember = (targetRole: WorkspaceRole) => permissions.canRemoveMember(targetRole);
+  const canChangeRole = (targetRole: WorkspaceRole) => permissions.canChangeRole(targetRole);
 
   if (isLoading) {
     return (

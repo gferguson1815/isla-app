@@ -31,6 +31,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Copy, Edit, ExternalLink, MoreVertical, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { usePermissions } from '@/hooks/usePermissions';
+import { Permission } from '@/lib/permissions';
 
 interface Link {
   id: string;
@@ -41,6 +43,7 @@ interface Link {
   clickCount: number;
   createdAt: Date | string;
   shortUrl: string;
+  created_by?: string;
 }
 
 interface LinksTableProps {
@@ -53,6 +56,7 @@ export function LinksTable({ links, onDelete, isDeleting = false }: LinksTablePr
   const router = useRouter();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedLink, setSelectedLink] = useState<Link | null>(null);
+  const { canUpdateLink, canDeleteLink, hasPermission } = usePermissions();
 
   const handleCopyLink = (shortUrl: string) => {
     navigator.clipboard.writeText(shortUrl);
@@ -87,12 +91,14 @@ export function LinksTable({ links, onDelete, isDeleting = false }: LinksTablePr
         <CardContent className="py-8">
           <div className="text-center text-muted-foreground">
             <p>No links yet. Create your first link to get started.</p>
-            <Button
-              className="mt-4"
-              onClick={() => router.push('/links/new')}
-            >
-              Create Your First Link
-            </Button>
+            {hasPermission(Permission.LINKS_CREATE) && (
+              <Button
+                className="mt-4"
+                onClick={() => router.push('/links/new')}
+              >
+                Create Your First Link
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -169,17 +175,21 @@ export function LinksTable({ links, onDelete, isDeleting = false }: LinksTablePr
                         <Copy className="mr-2 h-4 w-4" />
                         Copy Link
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleEdit(link.id)}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-red-600"
-                        onClick={() => handleDeleteClick(link)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
+                      {canUpdateLink(link.created_by || '') && (
+                        <DropdownMenuItem onClick={() => handleEdit(link.id)}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                      )}
+                      {canDeleteLink(link.created_by || '') && (
+                        <DropdownMenuItem
+                          className="text-red-600"
+                          onClick={() => handleDeleteClick(link)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>

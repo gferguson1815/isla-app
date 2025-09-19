@@ -6,6 +6,8 @@ import { Command as CommandPrimitive } from "cmdk";
 import Fuse from "fuse.js";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Command, commandRegistry } from "@/lib/command-registry";
+import { usePermissions } from "@/hooks/usePermissions";
+import { Permission } from "@/lib/permissions";
 import {
   Home,
   Link2,
@@ -33,11 +35,12 @@ export function CommandPalette() {
   const [commands, setCommands] = useState<Command[]>([]);
   const [filteredCommands, setFilteredCommands] = useState<Command[]>([]);
   const [recentCommands, setRecentCommands] = useState<Command[]>([]);
+  const { hasPermission, isAdmin } = usePermissions();
 
   useEffect(() => {
     commandRegistry.clear();
 
-    commandRegistry.registerBatch([
+    const allCommands = [
       {
         id: "home",
         name: "Go to Dashboard",
@@ -91,6 +94,7 @@ export function CommandPalette() {
           setOpen(false);
         },
         keywords: ["create", "new", "link", "add"],
+        permission: Permission.LINKS_CREATE,
       },
       {
         id: "search-links",
@@ -129,6 +133,7 @@ export function CommandPalette() {
         icon: Settings,
         handler: () => router.push("/settings/workspace"),
         keywords: ["workspace", "team", "organization"],
+        requiresAdmin: true,
       },
       {
         id: "team-members",
@@ -138,6 +143,7 @@ export function CommandPalette() {
         icon: Users,
         handler: () => router.push("/settings/team"),
         keywords: ["team", "members", "users", "invite"],
+        requiresAdmin: true,
       },
       {
         id: "tags",
@@ -165,6 +171,7 @@ export function CommandPalette() {
         icon: Zap,
         handler: () => router.push("/settings/api"),
         keywords: ["api", "keys", "tokens", "integration"],
+        requiresAdmin: true,
       },
       {
         id: "documentation",
@@ -175,11 +182,26 @@ export function CommandPalette() {
         handler: () => window.open("https://docs.isla.sh", "_blank"),
         keywords: ["docs", "help", "guide"],
       },
-    ]);
+    ];
+
+    // Filter commands based on permissions
+    const filteredByPermissions = allCommands.filter(cmd => {
+      // Check permission-based visibility
+      if ((cmd as any).permission && !hasPermission((cmd as any).permission)) {
+        return false;
+      }
+      // Check admin-only visibility
+      if ((cmd as any).requiresAdmin && !isAdmin()) {
+        return false;
+      }
+      return true;
+    });
+
+    commandRegistry.registerBatch(filteredByPermissions);
 
     setCommands(commandRegistry.getAll());
     setRecentCommands(commandRegistry.getRecentCommands());
-  }, [router]);
+  }, [router, hasPermission, isAdmin]);
 
   useEffect(() => {
     if (search) {
