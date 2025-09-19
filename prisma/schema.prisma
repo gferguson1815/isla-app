@@ -182,6 +182,7 @@ model workspaces {
   max_links              Int                     @default(50)
   max_clicks             Int                     @default(5000)
   max_users              Int                     @default(1)
+  custom_limits          Json?                   // Admin overrides: {beta_user: boolean, vip_customer: boolean, temp_increases: {links: 100, expires: "2024-01-01"}}
   created_at             DateTime                @default(now()) @db.Timestamptz(6)
   updated_at             DateTime                @db.Timestamptz(6)
   deleted_at             DateTime?               @db.Timestamptz(6)
