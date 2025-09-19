@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
-import { hashIP, parseUserAgent } from '@/lib/utils/click-tracking';
+import { hashIP } from '@/lib/utils/click-tracking';
+import { parseUserAgentEnhanced, isBot } from '@/lib/utils/user-agent-parser';
+import { parseReferrer } from '@/lib/utils/referrer-parser';
+import { extractGeoLocation } from '@/lib/utils/geo-location';
+import { getPrivacySettings, sanitizeClickEvent, shouldBlockTracking } from '@/lib/analytics/privacy';
 import { z } from 'zod';
 
 export const runtime = 'edge';
@@ -85,28 +89,80 @@ export async function GET(
 
     const userAgent = request.headers.get('user-agent') || '';
     const referrer = request.headers.get('referer') || null;
+
+    // Check if it's a bot
+    if (isBot(userAgent)) {
+      // Still redirect bots but skip detailed tracking
+      return NextResponse.redirect(linkData.url, {
+        status: 301,
+        headers: new Headers({
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+        }),
+      });
+    }
+
+    // Extract geo-location from Vercel headers
+    const geoLocation = extractGeoLocation(request);
+
+    // Get privacy settings based on location
+    const privacySettings = getPrivacySettings(request, geoLocation.country, geoLocation.region);
+
+    // Check if tracking should be blocked
+    if (shouldBlockTracking(privacySettings)) {
+      // Redirect without tracking
+      return NextResponse.redirect(linkData.url, {
+        status: 301,
+        headers: new Headers({
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'X-Privacy': 'DNT-Respected',
+        }),
+      });
+    }
+
+    // Enhanced user agent parsing
+    const deviceInfo = parseUserAgentEnhanced(userAgent);
+
+    // Enhanced referrer parsing
+    const parsedReferrer = parseReferrer(referrer, linkData.url);
+
+    // Hash IP for privacy
     const hashedIP = await hashIP(ip);
-    const deviceInfo = parseUserAgent(userAgent);
 
     request.signal.addEventListener('abort', () => {
       console.log('Request aborted, skipping analytics');
     });
 
-    const clickEvent = {
+    // Build enhanced click event
+    let clickEvent: Record<string, unknown> = {
       linkId: linkData.id,
       timestamp: new Date().toISOString(),
       ipAddress: hashedIP,
       device: deviceInfo.device,
       browser: deviceInfo.browser,
+      browserVersion: deviceInfo.browserVersion,
       os: deviceInfo.os,
+      osVersion: deviceInfo.osVersion,
       referer: referrer,
+      referrerType: parsedReferrer.type,
       userAgent,
-      country: null,
-      region: null,
-      city: null,
-      latitude: null,
-      longitude: null,
+      country: geoLocation.country,
+      region: geoLocation.region,
+      city: geoLocation.city,
+      latitude: geoLocation.latitude,
+      longitude: geoLocation.longitude,
     };
+
+    // Add UTM parameters if present
+    if (parsedReferrer.utmParams) {
+      clickEvent.utmSource = parsedReferrer.utmParams.source;
+      clickEvent.utmMedium = parsedReferrer.utmParams.medium;
+      clickEvent.utmCampaign = parsedReferrer.utmParams.campaign;
+      clickEvent.utmTerm = parsedReferrer.utmParams.term;
+      clickEvent.utmContent = parsedReferrer.utmParams.content;
+    }
+
+    // Sanitize click event for privacy compliance
+    clickEvent = sanitizeClickEvent(clickEvent, privacySettings);
 
     const ctx = {
       waitUntil: (promise: Promise<void>) => promise,
@@ -142,21 +198,7 @@ export async function GET(
   }
 }
 
-async function trackClickEvent(linkId: string, clickEvent: {
-  linkId: string;
-  timestamp: string;
-  ipAddress: string;
-  device: string;
-  browser: string;
-  os: string;
-  referer: string | null;
-  userAgent: string;
-  country: null;
-  region: null;
-  city: null;
-  latitude: null;
-  longitude: null;
-}) {
+async function trackClickEvent(linkId: string, clickEvent: Record<string, unknown>) {
   try {
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
 

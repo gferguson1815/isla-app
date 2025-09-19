@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,173 +8,178 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// User model extending Supabase auth.users
-model User {
-  id                    String                  @id @default(uuid()) @db.Uuid
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model analytics_aggregates {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  link_id                 String?   @db.Uuid
+  period                  String    @db.VarChar(10)
+  period_start            DateTime  @db.Timestamptz(6)
+  total_clicks            Int       @default(0)
+  unique_visitors         Int       @default(0)
+  device_breakdown        Json?
+  browser_breakdown       Json?
+  os_breakdown            Json?
+  country_breakdown       Json?
+  referrer_type_breakdown Json?
+  created_at              DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime? @default(now()) @db.Timestamptz(6)
+  links                   links?    @relation(fields: [link_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([link_id, period, period_start], map: "unique_link_period_start")
+  @@index([link_id, period, period_start], map: "idx_analytics_aggregates_link_period")
+  @@index([period_start], map: "idx_analytics_aggregates_period_start")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model campaigns {
+  id           String     @id @db.Uuid
+  workspace_id String     @db.Uuid
+  name         String
+  description  String?
+  start_date   DateTime?  @db.Timestamptz(6)
+  end_date     DateTime?  @db.Timestamptz(6)
+  created_at   DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime   @db.Timestamptz(6)
+  workspaces   workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  links        links[]
+
+  @@index([workspace_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model click_events {
+  id              String   @id @db.Uuid
+  link_id         String   @db.Uuid
+  timestamp       DateTime @default(now()) @db.Timestamptz(6)
+  ip_address      String?
+  user_agent      String?
+  referer         String?
+  device          String?
+  os              String?
+  browser         String?
+  country         String?
+  region          String?
+  city            String?
+  latitude        Float?
+  longitude       Float?
+  browser_version String?  @db.VarChar(20)
+  os_version      String?  @db.VarChar(20)
+  referrer_type   String?  @db.VarChar(20)
+  utm_source      String?  @db.VarChar(100)
+  utm_medium      String?  @db.VarChar(100)
+  utm_campaign    String?  @db.VarChar(100)
+  utm_term        String?  @db.VarChar(100)
+  utm_content     String?  @db.VarChar(100)
+  links           links    @relation(fields: [link_id], references: [id], onDelete: Cascade)
+
+  @@index([link_id])
+  @@index([timestamp])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model folders {
+  id            String     @id @db.Uuid
+  workspace_id  String     @db.Uuid
+  name          String
+  parent_id     String?    @db.Uuid
+  level         Int        @default(0)
+  created_at    DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime   @db.Timestamptz(6)
+  folders       folders?   @relation("foldersTofolders", fields: [parent_id], references: [id], onDelete: Cascade)
+  other_folders folders[]  @relation("foldersTofolders")
+  workspaces    workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  links         links[]
+
+  @@index([parent_id])
+  @@index([workspace_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model links {
+  id                      String                 @id @db.Uuid
+  workspace_id            String                 @db.Uuid
+  folder_id               String?                @db.Uuid
+  campaign_id             String?                @db.Uuid
+  slug                    String                 @unique
+  url                     String
+  title                   String?
+  description             String?
+  image                   String?
+  favicon                 String?
+  password                String?
+  expires_at              DateTime?              @db.Timestamptz(6)
+  is_active               Boolean                @default(true)
+  click_limit             Int?
+  click_count             Int                    @default(0)
+  last_clicked_at         DateTime?              @db.Timestamptz(6)
+  utm_source              String?
+  utm_medium              String?
+  utm_campaign            String?
+  utm_term                String?
+  utm_content             String?
+  ios_url                 String?
+  android_url             String?
+  enable_geolocation      Boolean                @default(false)
+  enable_device_targeting Boolean                @default(false)
+  created_at              DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime               @db.Timestamptz(6)
+  analytics_aggregates    analytics_aggregates[]
+  click_events            click_events[]
+  campaigns               campaigns?             @relation(fields: [campaign_id], references: [id])
+  folders                 folders?               @relation(fields: [folder_id], references: [id])
+  workspaces              workspaces             @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@index([campaign_id])
+  @@index([folder_id])
+  @@index([slug])
+  @@index([workspace_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model users {
+  id                    String                  @id @db.Uuid
   email                 String                  @unique
   name                  String?
-  avatarUrl             String?                 @map("avatar_url")
-  isSuspended           Boolean                 @default(false) @map("is_suspended")
-  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  workspaceMemberships  WorkspaceMembership[]
-
-  @@map("users")
+  avatar_url            String?
+  is_suspended          Boolean                 @default(false)
+  created_at            DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime                @db.Timestamptz(6)
+  workspace_memberships workspace_memberships[]
 }
 
-// Workspace model for multi-tenant support
-model Workspace {
-  id                    String                  @id @default(uuid()) @db.Uuid
-  name                  String
-  slug                  String                  @unique
-  domain                String?
-  plan                  String                  @default("free")
-  stripeCustomerId      String?                 @unique @map("stripe_customer_id")
-  stripeSubscriptionId  String?                 @unique @map("stripe_subscription_id")
-  maxLinks              Int                     @default(50) @map("max_links")
-  maxClicks             Int                     @default(5000) @map("max_clicks")
-  maxUsers              Int                     @default(1) @map("max_users")
-  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model workspace_memberships {
+  id           String     @id @db.Uuid
+  user_id      String     @db.Uuid
+  workspace_id String     @db.Uuid
+  role         String     @default("member")
+  joined_at    DateTime   @default(now()) @db.Timestamptz(6)
+  users        users      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  workspaces   workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
 
-  members               WorkspaceMembership[]
-  links                 Link[]
-  folders               Folder[]
-  campaigns             Campaign[]
+  @@unique([user_id, workspace_id])
+  @@index([user_id])
+  @@index([workspace_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model workspaces {
+  id                     String                  @id @db.Uuid
+  name                   String
+  slug                   String                  @unique
+  domain                 String?
+  plan                   String                  @default("free")
+  stripe_customer_id     String?                 @unique
+  stripe_subscription_id String?                 @unique
+  max_links              Int                     @default(50)
+  max_clicks             Int                     @default(5000)
+  max_users              Int                     @default(1)
+  created_at             DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                @db.Timestamptz(6)
+  campaigns              campaigns[]
+  folders                folders[]
+  links                  links[]
+  workspace_memberships  workspace_memberships[]
 
   @@index([slug])
-  @@map("workspaces")
-}
-
-// Junction table for workspace membership with roles
-model WorkspaceMembership {
-  id                    String                  @id @default(uuid()) @db.Uuid
-  userId                String                  @map("user_id") @db.Uuid
-  workspaceId           String                  @map("workspace_id") @db.Uuid
-  role                  String                  @default("member") // owner, admin, member
-  joinedAt              DateTime                @default(now()) @map("joined_at") @db.Timestamptz(6)
-
-  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace             Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, workspaceId])
-  @@index([userId])
-  @@index([workspaceId])
-  @@map("workspace_memberships")
-}
-
-// Folder model for link organization
-model Folder {
-  id                    String                  @id @default(uuid()) @db.Uuid
-  workspaceId           String                  @map("workspace_id") @db.Uuid
-  name                  String
-  parentId              String?                 @map("parent_id") @db.Uuid
-  level                 Int                     @default(0)
-  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  workspace             Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  parent                Folder?                 @relation("FolderParent", fields: [parentId], references: [id], onDelete: Cascade)
-  children              Folder[]                @relation("FolderParent")
-  links                 Link[]
-
-  @@index([workspaceId])
-  @@index([parentId])
-  @@map("folders")
-}
-
-// Campaign model for marketing coordination
-model Campaign {
-  id                    String                  @id @default(uuid()) @db.Uuid
-  workspaceId           String                  @map("workspace_id") @db.Uuid
-  name                  String
-  description           String?
-  startDate             DateTime?               @map("start_date") @db.Timestamptz(6)
-  endDate               DateTime?               @map("end_date") @db.Timestamptz(6)
-  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  workspace             Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  links                 Link[]
-
-  @@index([workspaceId])
-  @@map("campaigns")
-}
-
-// Link model for shortened URLs
-model Link {
-  id                    String                  @id @default(uuid()) @db.Uuid
-  workspaceId           String                  @map("workspace_id") @db.Uuid
-  folderId              String?                 @map("folder_id") @db.Uuid
-  campaignId            String?                 @map("campaign_id") @db.Uuid
-  slug                  String                  @unique
-  url                   String
-  title                 String?
-  description           String?
-  image                 String?
-  favicon               String?
-  password              String?
-  expiresAt             DateTime?               @map("expires_at") @db.Timestamptz(6)
-  isActive              Boolean                 @default(true) @map("is_active")
-  clickLimit            Int?                    @map("click_limit")
-  clickCount            Int                     @default(0) @map("click_count")
-  lastClickedAt         DateTime?               @map("last_clicked_at") @db.Timestamptz(6)
-
-  // UTM parameters
-  utmSource             String?                 @map("utm_source")
-  utmMedium             String?                 @map("utm_medium")
-  utmCampaign           String?                 @map("utm_campaign")
-  utmTerm               String?                 @map("utm_term")
-  utmContent            String?                 @map("utm_content")
-
-  // Metadata
-  iosUrl                String?                 @map("ios_url")
-  androidUrl            String?                 @map("android_url")
-  enableGeolocation     Boolean                 @default(false) @map("enable_geolocation")
-  enableDeviceTargeting Boolean                 @default(false) @map("enable_device_targeting")
-
-  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  workspace             Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  folder                Folder?                 @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  campaign              Campaign?               @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  clickEvents           ClickEvent[]
-
-  @@index([slug])
-  @@index([workspaceId])
-  @@index([folderId])
-  @@index([campaignId])
-  @@map("links")
-}
-
-// ClickEvent model for analytics
-model ClickEvent {
-  id                    String                  @id @default(uuid()) @db.Uuid
-  linkId                String                  @map("link_id") @db.Uuid
-  timestamp             DateTime                @default(now()) @db.Timestamptz(6)
-
-  // Visitor information
-  ipAddress             String?                 @map("ip_address")
-  userAgent             String?                 @map("user_agent")
-  referer               String?
-
-  // Device information
-  device                String?                 // desktop, mobile, tablet
-  os                    String?
-  browser               String?
-
-  // Geo information
-  country               String?
-  region                String?
-  city                  String?
-  latitude              Float?
-  longitude             Float?
-
-  link                  Link                    @relation(fields: [linkId], references: [id], onDelete: Cascade)
-
-  @@index([linkId])
-  @@index([timestamp])
-  @@map("click_events")
 }
