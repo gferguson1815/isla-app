@@ -16,7 +16,7 @@ export const maxDuration = 60; // 60 seconds max
  *
  * Security: Protected by Vercel Cron secret
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // Verify this is a legitimate cron request
     const authHeader = (await headers()).get('authorization');

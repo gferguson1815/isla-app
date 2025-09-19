@@ -204,7 +204,7 @@ function AnalyticsDashboardContent() {
             {isLoading ? (
               <Skeleton className="h-full w-full" />
             ) : (
-              <DeviceChart data={deviceData || {}} />
+              <DeviceChart data={deviceData || { mobile: 0, desktop: 0, tablet: 0 }} />
             )}
           </CardContent>
         </Card>
@@ -234,7 +234,13 @@ function AnalyticsDashboardContent() {
           {isLoading ? (
             <Skeleton className="h-[400px] w-full" />
           ) : (
-            <ClickTimeline events={clickEvents || []} linkId={linkId} />
+            <ClickTimeline
+              events={(clickEvents || []).filter((e: any) => e.device !== null).map((e: any) => ({
+                ...e,
+                device: e.device as 'mobile' | 'desktop' | 'tablet'
+              }))}
+              linkId={linkId}
+            />
           )}
         </CardContent>
       </Card>

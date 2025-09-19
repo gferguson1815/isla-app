@@ -3,3 +3,5 @@ export interface BaseEntity {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export * from './utm';

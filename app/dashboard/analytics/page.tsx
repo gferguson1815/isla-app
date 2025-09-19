@@ -6,7 +6,6 @@ import { useAnalytics } from '@/hooks/useAnalytics';
 import { useRealtimeClicks } from '@/hooks/useRealtimeClicks';
 import { useWorkspace } from '@/contexts/workspace-context';
 import { WorkspaceSelector } from '@/components/workspace-selector';
-import { LinkAnalyticsCard } from '../components/LinkAnalyticsCard';
 import { ClicksTimeSeriesChart } from '../components/ClicksTimeSeriesChart';
 import { AnalyticsSkeleton } from '../components/AnalyticsSkeleton';
 import { Activity, MousePointerClick, TrendingUp, Users } from 'lucide-react';

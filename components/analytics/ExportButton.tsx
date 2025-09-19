@@ -45,7 +45,7 @@ export const ExportButton = memo(function ExportButton({
 
     const now = new Date();
     let startDate: Date;
-    let endDate = now;
+    const endDate = now;
 
     switch (dateRange) {
       case '24h':

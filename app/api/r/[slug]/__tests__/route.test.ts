@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GET } from '../route';
 import { NextRequest } from 'next/server';
+import { Redis } from '@upstash/redis';
+import { createClient } from '@supabase/supabase-js';
+import { Ratelimit } from '@upstash/ratelimit';
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
@@ -29,10 +32,23 @@ vi.mock('@upstash/ratelimit', () => ({
   },
 }));
 
+interface MockRedis {
+  get: ReturnType<typeof vi.fn>;
+  setex: ReturnType<typeof vi.fn>;
+}
+
+interface MockSupabase {
+  from: ReturnType<typeof vi.fn>;
+}
+
+interface MockRatelimit {
+  limit: ReturnType<typeof vi.fn>;
+}
+
 describe('Redirect API Route', () => {
-  let mockRedis: any;
-  let mockSupabase: any;
-  let mockRatelimit: any;
+  let mockRedis: MockRedis;
+  let mockSupabase: MockSupabase;
+  let mockRatelimit: MockRatelimit;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -66,9 +82,9 @@ describe('Redirect API Route', () => {
       limit: vi.fn(() => ({ success: true })),
     };
 
-    vi.mocked(require('@upstash/redis').Redis).mockReturnValue(mockRedis);
-    vi.mocked(require('@supabase/supabase-js').createClient).mockReturnValue(mockSupabase);
-    vi.mocked(require('@upstash/ratelimit').Ratelimit).mockImplementation(() => mockRatelimit);
+    vi.mocked(Redis).mockReturnValue(mockRedis);
+    vi.mocked(createClient).mockReturnValue(mockSupabase);
+    vi.mocked(Ratelimit).mockImplementation(() => mockRatelimit);
   });
 
   afterEach(() => {

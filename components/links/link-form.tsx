@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -9,10 +9,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Link as LinkIcon, Shuffle, Copy, CheckCircle } from 'lucide-react';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { Loader2, Link as LinkIcon, Shuffle, Copy, CheckCircle, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { generateRandomSlug } from '@/lib/utils/slug';
 import { appConfig } from '@/lib/config/app';
+import { extractUtmFromPastedUrl, buildUrlWithUtm } from '@/lib/utils/utm-parser';
+import { UtmBuilderFormData, UTM_VALIDATION_RULES } from '@/packages/shared/src/types/utm';
+import UTMBuilder from '@/components/utm/UTMBuilder';
+import UTMTemplateSelector from '@/components/utm/UTMTemplateSelector';
+import { trpc } from '@/lib/trpc/client';
 
 const linkFormSchema = z.object({
   url: z.string()
@@ -30,7 +40,37 @@ const linkFormSchema = z.object({
     .max(appConfig.links.customSlugMaxLength, `Slug must be at most ${appConfig.links.customSlugMaxLength} characters`)
     .regex(/^[a-zA-Z0-9-]+$/, 'Slug can only contain letters, numbers, and hyphens')
     .optional()
-    .or(z.literal(''))
+    .or(z.literal('')),
+  utmSource: z
+    .string()
+    .max(UTM_VALIDATION_RULES.maxLength)
+    .regex(UTM_VALIDATION_RULES.pattern, 'Only letters, numbers, underscores, and hyphens allowed')
+    .optional()
+    .or(z.literal('')),
+  utmMedium: z
+    .string()
+    .max(UTM_VALIDATION_RULES.maxLength)
+    .regex(UTM_VALIDATION_RULES.pattern, 'Only letters, numbers, underscores, and hyphens allowed')
+    .optional()
+    .or(z.literal('')),
+  utmCampaign: z
+    .string()
+    .max(UTM_VALIDATION_RULES.maxLength)
+    .regex(UTM_VALIDATION_RULES.pattern, 'Only letters, numbers, underscores, and hyphens allowed')
+    .optional()
+    .or(z.literal('')),
+  utmTerm: z
+    .string()
+    .max(UTM_VALIDATION_RULES.maxLength)
+    .regex(UTM_VALIDATION_RULES.pattern, 'Only letters, numbers, underscores, and hyphens allowed')
+    .optional()
+    .or(z.literal('')),
+  utmContent: z
+    .string()
+    .max(UTM_VALIDATION_RULES.maxLength)
+    .regex(UTM_VALIDATION_RULES.pattern, 'Only letters, numbers, underscores, and hyphens allowed')
+    .optional()
+    .or(z.literal('')),
 });
 
 type LinkFormData = z.infer<typeof linkFormSchema>;
@@ -43,6 +83,18 @@ interface LinkFormProps {
 export function LinkForm({ onSubmit, isLoading = false }: LinkFormProps) {
   const [showSuccess, setShowSuccess] = useState(false);
   const [createdLink, setCreatedLink] = useState('');
+  const [isUtmOpen, setIsUtmOpen] = useState(false);
+  const [utmData, setUtmData] = useState<UtmBuilderFormData>({});
+  const [finalUrl, setFinalUrl] = useState('');
+
+  const { data: templates, isLoading: templatesLoading } = trpc.utmTemplate.list.useQuery();
+  const createTemplate = trpc.utmTemplate.create.useMutation({
+    onSuccess: () => {
+      toast.success('UTM template saved!');
+    },
+  });
+  const deleteTemplate = trpc.utmTemplate.delete.useMutation();
+  const updateTemplate = trpc.utmTemplate.update.useMutation();
 
   const {
     register,
@@ -55,15 +107,62 @@ export function LinkForm({ onSubmit, isLoading = false }: LinkFormProps) {
     resolver: zodResolver(linkFormSchema),
     defaultValues: {
       url: '',
-      slug: ''
+      slug: '',
+      utmSource: '',
+      utmMedium: '',
+      utmCampaign: '',
+      utmTerm: '',
+      utmContent: '',
     }
   });
 
   const slugValue = watch('slug');
+  const urlValue = watch('url');
+
+  // Auto-extract UTM parameters when URL changes
+  useEffect(() => {
+    if (urlValue) {
+      const extracted = extractUtmFromPastedUrl(urlValue);
+      if (Object.values(extracted).some(v => v)) {
+        setValue('utmSource', extracted.utmSource || '');
+        setValue('utmMedium', extracted.utmMedium || '');
+        setValue('utmCampaign', extracted.utmCampaign || '');
+        setValue('utmTerm', extracted.utmTerm || '');
+        setValue('utmContent', extracted.utmContent || '');
+        setUtmData(extracted);
+        setIsUtmOpen(true);
+      }
+    }
+  }, [urlValue, setValue]);
+
+  // Update final URL preview with UTM parameters
+  useEffect(() => {
+    if (urlValue && utmData) {
+      const url = buildUrlWithUtm(urlValue, {
+        utm_source: utmData.utmSource,
+        utm_medium: utmData.utmMedium,
+        utm_campaign: utmData.utmCampaign,
+        utm_term: utmData.utmTerm,
+        utm_content: utmData.utmContent,
+      });
+      setFinalUrl(url);
+    } else {
+      setFinalUrl(urlValue);
+    }
+  }, [urlValue, utmData]);
 
   const generateSlug = () => {
     const slug = generateRandomSlug();
     setValue('slug', slug);
+  };
+
+  const handleUtmChange = (data: UtmBuilderFormData) => {
+    setUtmData(data);
+    setValue('utmSource', data.utmSource || '');
+    setValue('utmMedium', data.utmMedium || '');
+    setValue('utmCampaign', data.utmCampaign || '');
+    setValue('utmTerm', data.utmTerm || '');
+    setValue('utmContent', data.utmContent || '');
   };
 
   const handleFormSubmit = async (data: LinkFormData) => {
@@ -74,7 +173,7 @@ export function LinkForm({ onSubmit, isLoading = false }: LinkFormProps) {
       setCreatedLink(shortLink);
       setShowSuccess(true);
       reset();
-    } catch (error) {
+    } catch {
       toast.error('Failed to create link');
     }
   };
@@ -165,6 +264,76 @@ export function LinkForm({ onSubmit, isLoading = false }: LinkFormProps) {
               Leave blank to auto-generate a random slug
             </p>
           </div>
+
+          <Collapsible open={isUtmOpen} onOpenChange={setIsUtmOpen}>
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="outline" className="w-full justify-between">
+                <span>Campaign Tracking (UTM Parameters)</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${isUtmOpen ? 'rotate-180' : ''}`} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-4 space-y-4">
+              <UTMBuilder
+                onChange={handleUtmChange}
+                defaultValues={utmData}
+                onApplyTemplate={() => {}}
+              />
+
+              <UTMTemplateSelector
+                templates={templates}
+                isLoading={templatesLoading}
+                onSelectTemplate={(template) => {
+                  const templateData = {
+                    utmSource: template.utm_source || '',
+                    utmMedium: template.utm_medium || '',
+                    utmCampaign: template.utm_campaign || '',
+                    utmTerm: template.utm_term || '',
+                    utmContent: template.utm_content || '',
+                  };
+                  handleUtmChange(templateData);
+                }}
+                onSaveTemplate={async ({ name, description, utmData }) => {
+                  await createTemplate.mutateAsync({
+                    name,
+                    description,
+                    utmSource: utmData.utmSource,
+                    utmMedium: utmData.utmMedium,
+                    utmCampaign: utmData.utmCampaign,
+                    utmTerm: utmData.utmTerm,
+                    utmContent: utmData.utmContent,
+                  });
+                }}
+                onDeleteTemplate={async (id) => {
+                  await deleteTemplate.mutateAsync({ id });
+                }}
+                onUpdateTemplate={async (id, data) => {
+                  await updateTemplate.mutateAsync({
+                    id,
+                    name: data.name || '',
+                    description: data.description,
+                    utmSource: data.utmSource,
+                    utmMedium: data.utmMedium,
+                    utmCampaign: data.utmCampaign,
+                    utmTerm: data.utmTerm,
+                    utmContent: data.utmContent,
+                  });
+                }}
+                currentUtmData={utmData}
+              />
+            </CollapsibleContent>
+          </Collapsible>
+
+          {finalUrl && finalUrl !== urlValue && (
+            <Alert>
+              <LinkIcon className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-1">
+                  <div className="font-medium">Final URL with UTM:</div>
+                  <div className="text-xs break-all font-mono">{finalUrl}</div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
 
           {slugValue && (
             <Alert>

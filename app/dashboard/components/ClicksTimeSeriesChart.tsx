@@ -2,8 +2,6 @@
 
 import React from 'react';
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -48,8 +46,18 @@ export const ClicksTimeSeriesChart = React.memo(function ClicksTimeSeriesChart({
     return format(date, 'MMM d');
   };
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
+  interface TooltipProps {
+    active?: boolean;
+    payload?: Array<{
+      value: number;
+      name: string;
+      color: string;
+    }>;
+    label?: string;
+  }
+
+  const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
+    if (active && payload && payload.length && label) {
       const date = new Date(label);
       const formattedDate = label.includes(':')
         ? format(date, 'MMM d, yyyy HH:mm')
@@ -58,7 +66,7 @@ export const ClicksTimeSeriesChart = React.memo(function ClicksTimeSeriesChart({
       return (
         <div className="bg-background border rounded-lg shadow-lg p-3">
           <p className="text-sm font-medium mb-2">{formattedDate}</p>
-          {payload.map((entry: any, index: number) => (
+          {payload.map((entry, index) => (
             <div key={index} className="flex items-center gap-2">
               <div
                 className="w-3 h-3 rounded-full"

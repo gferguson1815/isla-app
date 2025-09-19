@@ -2,14 +2,20 @@ import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
 import { createClient } from '@/lib/supabase/server';
-import { subDays, startOfDay, endOfDay, format } from 'date-fns';
+import { subDays, format } from 'date-fns';
 import { analyticsRateLimiter, exportRateLimiter } from '@/lib/rate-limiter';
+import type { PrismaClient } from '@prisma/client';
+
+interface AnalyticsContext {
+  prisma: PrismaClient;
+  userId: string;
+}
 
 // Helper function to verify user has access to link analytics
-async function verifyLinkAccess(ctx: any, linkId: string) {
-  const link = await ctx.prisma.link.findUnique({
+async function verifyLinkAccess(ctx: AnalyticsContext, linkId: string) {
+  const link = await ctx.prisma.links.findUnique({
     where: { id: linkId },
-    select: { workspaceId: true },
+    select: { workspace_id: true },
   });
 
   if (!link) {
@@ -19,10 +25,10 @@ async function verifyLinkAccess(ctx: any, linkId: string) {
     });
   }
 
-  const membership = await ctx.prisma.workspaceMembership.findFirst({
+  const membership = await ctx.prisma.workspace_memberships.findFirst({
     where: {
-      workspaceId: link.workspaceId,
-      userId: ctx.userId,
+      workspace_id: link.workspace_id,
+      user_id: ctx.userId,
     },
   });
 
@@ -53,7 +59,7 @@ export const analyticsRouter = router({
       // Verify user has access to this link's analytics
       await verifyLinkAccess(ctx, input.linkId);
 
-      const supabase = createClient();
+      const supabase = await createClient();
 
       const now = new Date();
       let startDate: Date;
@@ -87,13 +93,13 @@ export const analyticsRouter = router({
       }
 
       const { data, error } = await supabase
-        .from('analytics_aggregates')
+        .from('analytics_aggregates' as any)
         .select('period_start, total_clicks, unique_visitors')
         .eq('link_id', input.linkId)
         .eq('period', period)
         .gte('period_start', startDate.toISOString())
         .lte('period_start', endDate.toISOString())
-        .order('period_start', { ascending: true });
+        .order('period_start', { ascending: true }) as any;
 
       if (error) {
         throw new TRPCError({
@@ -102,7 +108,13 @@ export const analyticsRouter = router({
         });
       }
 
-      return data.map(item => ({
+      const aggregateData = data as Array<{
+        period_start: string;
+        total_clicks: number;
+        unique_visitors: number;
+      }> | null;
+
+      return (aggregateData || []).map(item => ({
         periodStart: item.period_start,
         totalClicks: item.total_clicks,
         uniqueVisitors: item.unique_visitors,
@@ -123,7 +135,7 @@ export const analyticsRouter = router({
       // Verify user has access to this link's analytics
       await verifyLinkAccess(ctx, input.linkId);
 
-      const supabase = createClient();
+      const supabase = await createClient();
 
       const now = new Date();
       let startDate: Date | null = null;
@@ -204,12 +216,12 @@ export const analyticsRouter = router({
       // Verify user has access to this link's analytics
       await verifyLinkAccess(ctx, input.linkId);
 
-      const supabase = createClient();
+      const supabase = await createClient();
 
       const { data, error } = await supabase
-        .from('click_events')
+        .from('click_events' as any)
         .select('referrer, referrer_type')
-        .eq('link_id', input.linkId);
+        .eq('link_id', input.linkId) as any;
 
       if (error) {
         throw new TRPCError({
@@ -218,24 +230,27 @@ export const analyticsRouter = router({
         });
       }
 
-      const referrerCounts = data.reduce((acc, item) => {
+      const referrerCounts = (data || []).reduce((acc: Record<string, { referrer: string; referrerType: string; count: number }>, item: any) => {
         const referrer = item.referrer || 'direct';
         if (!acc[referrer]) {
           acc[referrer] = {
             referrer,
-            referrerType: item.referrer_type,
+            referrerType: item.referrer_type as string,
             count: 0,
           };
         }
         acc[referrer].count++;
         return acc;
-      }, {} as Record<string, { referrer: string; referrerType: any; count: number }>);
+      }, {} as Record<string, { referrer: string; referrerType: string; count: number }>);
 
-      const total = Object.values(referrerCounts).reduce((sum, item) => sum + item.count, 0);
+      const referrerValues = Object.values(referrerCounts) as Array<{ referrer: string; referrerType: string; count: number }>;
+      const total = referrerValues.reduce((sum, item) => sum + item.count, 0);
 
-      const sortedReferrers = Object.values(referrerCounts)
+      const sortedReferrers = referrerValues
         .map(item => ({
-          ...item,
+          referrer: item.referrer,
+          referrerType: item.referrerType as 'search' | 'social' | 'direct' | 'external' | null,
+          count: item.count,
           percentage: (item.count / total) * 100,
         }))
         .sort((a, b) => b.count - a.count);
@@ -265,7 +280,7 @@ export const analyticsRouter = router({
       // Verify user has access to this link's analytics
       await verifyLinkAccess(ctx, input.linkId);
 
-      const supabase = createClient();
+      const supabase = await createClient();
 
       const now = new Date();
       let startDate: Date | null = null;
@@ -284,7 +299,7 @@ export const analyticsRouter = router({
         query.gte('timestamp', startDate.toISOString());
       }
 
-      const { data, error } = await query;
+      const { data, error } = await query as any;
 
       if (error) {
         throw new TRPCError({
@@ -301,9 +316,10 @@ export const analyticsRouter = router({
 
       const browsers: Record<string, number> = {};
 
-      data.forEach(item => {
-        devices[item.device as keyof typeof devices]++;
-        browsers[item.browser] = (browsers[item.browser] || 0) + 1;
+      (data || []).forEach((item: any) => {
+        const deviceType = item.device as 'mobile' | 'desktop' | 'tablet' | null;
+        if (deviceType) devices[deviceType]++;
+        if (item.browser) browsers[item.browser] = (browsers[item.browser] || 0) + 1;
       });
 
       return {
@@ -321,6 +337,11 @@ export const analyticsRouter = router({
             device: z.enum(['mobile', 'desktop', 'tablet']).optional(),
             browser: z.string().optional(),
             country: z.string().optional(),
+            utmSource: z.string().optional(),
+            utmMedium: z.string().optional(),
+            utmCampaign: z.string().optional(),
+            utmTerm: z.string().optional(),
+            utmContent: z.string().optional(),
           })
           .optional(),
         cursor: z.string().optional(),
@@ -334,14 +355,14 @@ export const analyticsRouter = router({
       // Verify user has access to this link's analytics
       await verifyLinkAccess(ctx, input.linkId);
 
-      const supabase = createClient();
+      const supabase = await createClient();
 
       let query = supabase
-        .from('click_events')
+        .from('click_events' as any)
         .select('*')
         .eq('link_id', input.linkId)
         .order('timestamp', { ascending: false })
-        .limit(input.limit);
+        .limit(input.limit) as any;
 
       if (input.filters?.device) {
         query = query.eq('device', input.filters.device);
@@ -355,11 +376,32 @@ export const analyticsRouter = router({
         query = query.eq('country', input.filters.country);
       }
 
+      // Add UTM parameter filters
+      if (input.filters?.utmSource) {
+        query = query.eq('utm_source', input.filters.utmSource);
+      }
+
+      if (input.filters?.utmMedium) {
+        query = query.eq('utm_medium', input.filters.utmMedium);
+      }
+
+      if (input.filters?.utmCampaign) {
+        query = query.eq('utm_campaign', input.filters.utmCampaign);
+      }
+
+      if (input.filters?.utmTerm) {
+        query = query.eq('utm_term', input.filters.utmTerm);
+      }
+
+      if (input.filters?.utmContent) {
+        query = query.eq('utm_content', input.filters.utmContent);
+      }
+
       if (input.cursor) {
         query = query.lt('timestamp', input.cursor);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await query as any;
 
       if (error) {
         throw new TRPCError({
@@ -369,25 +411,25 @@ export const analyticsRouter = router({
       }
 
       return {
-        events: data.map(event => ({
+        events: (data || []).map((event: any) => ({
           id: event.id,
           linkId: event.link_id,
           timestamp: event.timestamp,
           country: event.country,
           city: event.city,
           region: event.region,
-          device: event.device,
+          device: event.device as 'mobile' | 'desktop' | 'tablet' | null,
           browser: event.browser,
-          browserVersion: event.browser_version,
+          browserVersion: event.browser_version || null,
           os: event.os,
-          osVersion: event.os_version,
-          referrer: event.referrer,
-          referrerType: event.referrer_type,
-          utmSource: event.utm_source,
-          utmMedium: event.utm_medium,
-          utmCampaign: event.utm_campaign,
+          osVersion: event.os_version || null,
+          referrer: event.referrer || event.referer || null,
+          referrerType: event.referrer_type as 'search' | 'social' | 'direct' | 'external' | null,
+          utmSource: event.utm_source || null,
+          utmMedium: event.utm_medium || null,
+          utmCampaign: event.utm_campaign || null,
         })),
-        nextCursor: data.length === input.limit ? data[data.length - 1].timestamp : null,
+        nextCursor: data && data.length === input.limit ? data[data.length - 1].timestamp : null,
       };
     }),
 
@@ -409,7 +451,7 @@ export const analyticsRouter = router({
       // Verify user has access to this link's analytics
       await verifyLinkAccess(ctx, input.linkId);
 
-      const supabase = createClient();
+      const supabase = await createClient();
 
       const { data, error } = await supabase
         .from('click_events')
@@ -451,18 +493,18 @@ export const analyticsRouter = router({
 
       const csvRows = [
         headers.join(','),
-        ...data.map(event =>
+        ...(data || []).map((event: any) =>
           [
             format(new Date(event.timestamp), 'yyyy-MM-dd HH:mm:ss'),
             event.country || '',
             event.city || '',
             event.region || '',
-            event.device,
-            event.browser,
+            event.device || '',
+            event.browser || '',
             event.browser_version || '',
-            event.os,
+            event.os || '',
             event.os_version || '',
-            event.referrer || '',
+            event.referrer || event.referer || '',
             event.referrer_type || '',
             event.utm_source || '',
             event.utm_medium || '',
@@ -475,6 +517,103 @@ export const analyticsRouter = router({
 
       return {
         csv: csvRows.join('\n'),
+      };
+    }),
+
+  getUtmBreakdown: protectedProcedure
+    .input(
+      z.object({
+        linkId: z.string(),
+        dateRange: z.enum(['24h', '7d', '30d', 'all']),
+        groupBy: z.enum(['source', 'medium', 'campaign', 'all']),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      // Apply rate limiting
+      await analyticsRateLimiter.checkLimit(ctx.userId);
+
+      // Verify user has access to this link's analytics
+      await verifyLinkAccess(ctx, input.linkId);
+
+      const supabase = await createClient();
+
+      const now = new Date();
+      let startDate: Date | null = null;
+
+      if (input.dateRange !== 'all') {
+        const days = input.dateRange === '24h' ? 1 : input.dateRange === '7d' ? 7 : 30;
+        startDate = subDays(now, days);
+      }
+
+      const query = supabase
+        .from('click_events')
+        .select('utm_source, utm_medium, utm_campaign, utm_term, utm_content')
+        .eq('link_id', input.linkId);
+
+      if (startDate) {
+        query.gte('timestamp', startDate.toISOString());
+      }
+
+      const { data, error } = await query as any;
+
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch UTM breakdown data',
+        });
+      }
+
+      const breakdown: Record<string, Record<string, number>> = {
+        source: {},
+        medium: {},
+        campaign: {},
+        term: {},
+        content: {},
+      };
+
+      (data || []).forEach((event: any) => {
+        if (event.utm_source) {
+          breakdown.source[event.utm_source] = (breakdown.source[event.utm_source] || 0) + 1;
+        }
+        if (event.utm_medium) {
+          breakdown.medium[event.utm_medium] = (breakdown.medium[event.utm_medium] || 0) + 1;
+        }
+        if (event.utm_campaign) {
+          breakdown.campaign[event.utm_campaign] = (breakdown.campaign[event.utm_campaign] || 0) + 1;
+        }
+        if (event.utm_term) {
+          breakdown.term[event.utm_term] = (breakdown.term[event.utm_term] || 0) + 1;
+        }
+        if (event.utm_content) {
+          breakdown.content[event.utm_content] = (breakdown.content[event.utm_content] || 0) + 1;
+        }
+      });
+
+      const total = (data || []).length;
+      const formatBreakdown = (values: Record<string, number>) => {
+        return Object.entries(values)
+          .map(([key, count]) => ({
+            value: key,
+            count,
+            percentage: total > 0 ? (count / total) * 100 : 0,
+          }))
+          .sort((a, b) => b.count - a.count);
+      };
+
+      if (input.groupBy === 'all') {
+        return {
+          source: formatBreakdown(breakdown.source),
+          medium: formatBreakdown(breakdown.medium),
+          campaign: formatBreakdown(breakdown.campaign),
+          term: formatBreakdown(breakdown.term),
+          content: formatBreakdown(breakdown.content),
+          total,
+        };
+      }
+
+      return {
+        [input.groupBy]: formatBreakdown(breakdown[input.groupBy]),
+        total,
       };
     }),
 });
