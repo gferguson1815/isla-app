@@ -69,7 +69,7 @@ export function GlobalNav() {
 
   const handleSignOut = async () => {
     await fetch("/api/auth/signout", { method: "POST" });
-    window.location.href = "/auth/signin";
+    window.location.href = "/login";
   };
 
   const openCommandPalette = () => {

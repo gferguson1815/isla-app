@@ -81,14 +81,20 @@ export const userRouter = router({
           },
         });
 
-        // Create default workspace for new user
+        // NOTE: We no longer create a default workspace here
+        // Users go through onboarding at /onboarding to create their first workspace
+        // This provides a better user experience and allows customization
+
+        /* Commented out - moved to onboarding flow
         const workspaceName = input.name ? `${input.name}'s Workspace` : 'My Workspace';
         const workspaceSlug = workspaceName
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/(^-|-$)/g, '')
           .slice(0, 50);
+        */
 
+        /* Commented out - moved to onboarding flow
         // Ensure unique slug (simplified version)
         let uniqueSlug = workspaceSlug;
         let counter = 1;
@@ -132,15 +138,13 @@ export const userRouter = router({
             joined_at: new Date(),
           },
         });
+        */
 
+        // Return without workspace - user will create one in onboarding
         return {
           user,
           isNewUser: true,
-          defaultWorkspace: {
-            id: workspace.id,
-            name: workspace.name,
-            slug: workspace.slug,
-          },
+          // No defaultWorkspace since we're doing onboarding
         };
       } catch (error) {
         console.error('Error initializing user:', error);

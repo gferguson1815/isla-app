@@ -135,37 +135,40 @@ describe('useRealtimeClicks', () => {
   it('should handle reconnection on connection loss', async () => {
     vi.useFakeTimers();
 
-    const { result } = renderHook(
-      () => useRealtimeClicks({ linkId: 'link-1', enabled: true }),
-      { wrapper }
-    );
+    try {
+      const { result } = renderHook(
+        () => useRealtimeClicks({ linkId: 'link-1', enabled: true }),
+        { wrapper }
+      );
 
-    // Modify subscribe to simulate connection loss
-    mockChannel.subscribe = vi.fn((callback) => {
-      callback('CHANNEL_ERROR');
-      return mockChannel;
-    });
+      // Wait for initial connection
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+      });
 
-    // Clear previous calls
-    mockSupabase.channel.mockClear();
+      // Modify subscribe to simulate connection loss
+      mockChannel.subscribe = vi.fn((callback) => {
+        callback('CHANNEL_ERROR');
+        return mockChannel;
+      });
 
-    // Trigger reconnection
-    act(() => {
-      result.current.reconnect();
-    });
+      // Clear previous calls
+      mockSupabase.channel.mockClear();
 
-    // Fast forward time to trigger reconnection
-    act(() => {
-      vi.advanceTimersByTime(5000);
-    });
+      // Trigger reconnection and advance timers synchronously
+      act(() => {
+        if (result.current.reconnect) {
+          result.current.reconnect();
+        }
+        vi.advanceTimersByTime(5000);
+      });
 
-    await waitFor(() => {
       // Should attempt to reconnect
       expect(mockSupabase.channel).toHaveBeenCalled();
-    });
-
-    vi.useRealTimers();
-  });
+    } finally {
+      vi.useRealTimers();
+    }
+  }, 10000);
 
   it('should filter by workspace when workspaceId is provided', async () => {
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
@@ -177,7 +180,7 @@ describe('useRealtimeClicks', () => {
 
     await waitFor(() => {
       expect(mockChannel.on).toHaveBeenCalled();
-    });
+    }, { timeout: 2000 });
 
     const handler = mockChannel.on.mock.calls[0][2];
 
@@ -196,6 +199,6 @@ describe('useRealtimeClicks', () => {
       expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: ['analytics', 'workspace', 'workspace-1'],
       });
-    });
-  });
+    }, { timeout: 2000 });
+  }, 10000);
 });

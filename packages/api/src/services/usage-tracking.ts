@@ -173,7 +173,7 @@ export async function checkUsageAlerts(workspaceId: string): Promise<UsageAlert[
 /**
  * Sync Redis counters to database
  */
-export async function syncUsageToDa…tabase(workspaceId: string): Promise<void> {
+export async function syncUsageToDatabase(workspaceId: string): Promise<void> {
   // Acquire lock to prevent concurrent syncs
   const lockKey = RedisKeys.usageSyncLock(workspaceId)
   const lockAcquired = await UsageCounter.set(lockKey, 1, 60) // 60 second lock

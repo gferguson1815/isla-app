@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { useParams } from 'next/navigation'
 import { useAuth } from './auth-context'
 import { trpc } from '@/lib/trpc/client'
 import type { WorkspaceWithMembership } from '@/packages/shared/src/types/workspace'
@@ -9,6 +10,7 @@ type Workspace = WorkspaceWithMembership
 
 interface WorkspaceContextType {
   currentWorkspace: Workspace | null
+  workspaceSlug: string | null
   workspaces: Workspace[]
   loading: boolean
   error: string | null
@@ -18,6 +20,7 @@ interface WorkspaceContextType {
 
 const WorkspaceContext = createContext<WorkspaceContextType>({
   currentWorkspace: null,
+  workspaceSlug: null,
   workspaces: [],
   loading: true,
   error: null,
@@ -41,6 +44,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { user } = useAuth()
+  const params = useParams()
+  const workspaceSlug = (params?.workspace as string) || null
 
   const workspacesQuery = trpc.workspace.list.useQuery(undefined, {
     enabled: !!user,
@@ -105,6 +110,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     <WorkspaceContext.Provider
       value={{
         currentWorkspace,
+        workspaceSlug,
         workspaces,
         loading,
         error,

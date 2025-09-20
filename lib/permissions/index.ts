@@ -25,6 +25,10 @@ export enum Permission {
   INVITATIONS_SEND = 'invitations:send',
   INVITATIONS_REVOKE = 'invitations:revoke',
   INVITATIONS_VIEW = 'invitations:view',
+
+  // Analytics
+  ANALYTICS_VIEW = 'analytics:view',
+  ANALYTICS_EXPORT = 'analytics:export',
 }
 
 export const ROLE_PERMISSIONS: Record<WorkspaceRole, Permission[]> = {
@@ -47,6 +51,8 @@ export const ROLE_PERMISSIONS: Record<WorkspaceRole, Permission[]> = {
     Permission.INVITATIONS_SEND,
     Permission.INVITATIONS_REVOKE,
     Permission.INVITATIONS_VIEW,
+    Permission.ANALYTICS_VIEW,
+    Permission.ANALYTICS_EXPORT,
   ],
   admin: [
     // Admin permissions - cannot delete workspace or update owner roles

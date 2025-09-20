@@ -12,11 +12,12 @@ export async function middleware(request: NextRequest) {
                       request.nextUrl.pathname.startsWith('/signup') ||
                       request.nextUrl.pathname.startsWith('/auth')
 
-  const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard') ||
+  const isProtectedRoute = request.nextUrl.pathname.startsWith('/onboarding') ||
                            request.nextUrl.pathname.startsWith('/settings') ||
                            request.nextUrl.pathname.startsWith('/workspace') ||
                            request.nextUrl.pathname.startsWith('/protected') ||
-                           request.nextUrl.pathname.startsWith('/links')
+                           request.nextUrl.pathname.startsWith('/links') ||
+                           request.nextUrl.pathname === '/'
 
   if (!session && isProtectedRoute) {
     const redirectUrl = request.nextUrl.clone()
@@ -26,7 +27,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (session && isAuthRoute) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+    return NextResponse.redirect(new URL('/', request.url))
   }
 
   return response

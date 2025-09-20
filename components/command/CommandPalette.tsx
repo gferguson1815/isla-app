@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Command as CommandPrimitive } from "cmdk";
 import Fuse from "fuse.js";
@@ -8,6 +8,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Command, commandRegistry } from "@/lib/command-registry";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Permission } from "@/lib/permissions";
+import { CommandErrorBoundary, useCommandErrorHandler } from "./CommandErrorBoundary";
+import { usePerformanceMonitor } from "@/hooks/usePerformanceMonitor";
 import {
   Home,
   Link2,
@@ -36,11 +38,12 @@ export function CommandPalette() {
   const [filteredCommands, setFilteredCommands] = useState<Command[]>([]);
   const [recentCommands, setRecentCommands] = useState<Command[]>([]);
   const { hasPermission, isAdmin } = usePermissions();
+  const { handleCommandError } = useCommandErrorHandler();
+  const { startRender, endRender, startSearch, endSearch } = usePerformanceMonitor("CommandPalette");
+  const isInitialized = useRef(false);
 
-  useEffect(() => {
-    commandRegistry.clear();
-
-    const allCommands = [
+  // Define all commands using useMemo to prevent recreation
+  const allCommands = useMemo(() => [
       {
         id: "home",
         name: "Go to Dashboard",
@@ -182,10 +185,11 @@ export function CommandPalette() {
         handler: () => window.open("https://docs.isla.sh", "_blank"),
         keywords: ["docs", "help", "guide"],
       },
-    ];
+    ], [router, setOpen]);
 
-    // Filter commands based on permissions
-    const filteredByPermissions = allCommands.filter(cmd => {
+  // Filter commands based on permissions
+  const permissionFilteredCommands = useMemo(() => {
+    return allCommands.filter(cmd => {
       // Check permission-based visibility
       if ((cmd as any).permission && !hasPermission((cmd as any).permission)) {
         return false;
@@ -196,29 +200,51 @@ export function CommandPalette() {
       }
       return true;
     });
+  }, [allCommands, hasPermission, isAdmin]);
 
-    commandRegistry.registerBatch(filteredByPermissions);
+  // Register commands only once on initial mount
+  useEffect(() => {
+    if (isInitialized.current) return;
+    isInitialized.current = true;
 
-    setCommands(commandRegistry.getAll());
+    startRender();
+    commandRegistry.clear();
+    commandRegistry.registerBatch(permissionFilteredCommands);
+
+    const registeredCommands = commandRegistry.getAll();
+    setCommands(registeredCommands);
     setRecentCommands(commandRegistry.getRecentCommands());
-  }, [router, hasPermission, isAdmin]);
+
+    // Track command loading performance
+    endRender(registeredCommands.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (search) {
+      startSearch();
       const fuse = new Fuse(commands, fuseOptions);
       const results = fuse.search(search);
-      setFilteredCommands(results.map((result) => result.item));
+      const filteredResults = results.map((result) => result.item);
+      setFilteredCommands(filteredResults);
+      endSearch(filteredResults.length);
     } else {
       setFilteredCommands([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, commands]);
 
   const handleCommand = useCallback(async (command: Command) => {
-    await commandRegistry.execute(command.id);
-    setOpen(false);
-    setSearch("");
-    setRecentCommands(commandRegistry.getRecentCommands());
-  }, []);
+    try {
+      await commandRegistry.execute(command.id);
+      setOpen(false);
+      setSearch("");
+      setRecentCommands(commandRegistry.getRecentCommands());
+    } catch (error) {
+      handleCommandError(error as Error, `command: ${command.name}`);
+      // Keep the dialog open so user can try again
+    }
+  }, [handleCommandError]);
 
   useEffect(() => {
     const handleOpen = () => setOpen(true);
@@ -247,9 +273,10 @@ export function CommandPalette() {
   const displayCommands = search ? filteredCommands : commands;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="overflow-hidden p-0 shadow-2xl">
-        <CommandPrimitive className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
+    <CommandErrorBoundary>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="overflow-hidden p-0 shadow-2xl">
+          <CommandPrimitive className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
           <div className="flex items-center border-b px-3">
             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
             <CommandPrimitive.Input
@@ -266,13 +293,17 @@ export function CommandPalette() {
 
             {!search && recentCommands.length > 0 && (
               <CommandPrimitive.Group heading="Recent">
-                {recentCommands.map((command) => (
-                  <CommandItem
-                    key={command.id}
-                    command={command}
-                    onSelect={() => handleCommand(command)}
-                  />
-                ))}
+                {recentCommands.map((command) => {
+                  const stats = commandRegistry.getCommandStats(command.id);
+                  return (
+                    <CommandItem
+                      key={command.id}
+                      command={command}
+                      stats={stats}
+                      onSelect={() => handleCommand(command)}
+                    />
+                  );
+                })}
               </CommandPrimitive.Group>
             )}
 
@@ -325,15 +356,17 @@ export function CommandPalette() {
         </CommandPrimitive>
       </DialogContent>
     </Dialog>
+  </CommandErrorBoundary>
   );
 }
 
 interface CommandItemProps {
   command: Command;
+  stats?: { count: number; lastUsed: number; avgExecutionTime?: number } | null;
   onSelect: () => void;
 }
 
-function CommandItem({ command, onSelect }: CommandItemProps) {
+function CommandItem({ command, stats, onSelect }: CommandItemProps) {
   const Icon = command.icon || ArrowRight;
 
   return (
@@ -347,6 +380,11 @@ function CommandItem({ command, onSelect }: CommandItemProps) {
         <div className="font-medium">{command.name}</div>
         {command.description && (
           <div className="text-xs text-muted-foreground">{command.description}</div>
+        )}
+        {stats && stats.count > 1 && (
+          <div className="text-xs text-muted-foreground opacity-75">
+            Used {stats.count} times
+          </div>
         )}
       </div>
       {command.shortcut && (
