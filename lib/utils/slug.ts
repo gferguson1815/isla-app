@@ -90,3 +90,81 @@ export function needsSlug(url: string, shortDomain: string): boolean {
     return true;
   }
 }
+
+/**
+ * Generates a workspace slug from name
+ * @param name - Workspace name
+ * @returns Formatted slug
+ */
+export function generateSlugFromName(name: string): string {
+  return name
+    // First, add hyphens before capital letters (for camelCase/PascalCase)
+    .replace(/([a-z])([A-Z])/g, '$1-$2')
+    // Handle consecutive capitals (e.g., "ABCCorp" -> "ABC-Corp")
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+    // Convert to lowercase
+    .toLowerCase()
+    // Remove special characters except spaces and hyphens
+    .replace(/[^a-z0-9\s-]/g, '')
+    // Replace spaces with hyphens
+    .replace(/\s+/g, '-')
+    // Replace multiple hyphens with single hyphen
+    .replace(/-+/g, '-')
+    // Remove leading/trailing hyphens
+    .replace(/^-|-$/g, '')
+    // Limit to 30 characters
+    .slice(0, 30);
+}
+
+/**
+ * Reserved slugs that cannot be used for workspaces
+ */
+export const RESERVED_SLUGS = [
+  'admin',
+  'api',
+  'app',
+  'www',
+  'support',
+  'help',
+  'docs',
+  'blog',
+  'status',
+];
+
+/**
+ * Checks if a slug is reserved
+ * @param slug - Slug to check
+ * @returns True if reserved
+ */
+export function isSlugReserved(slug: string): boolean {
+  return RESERVED_SLUGS.includes(slug.toLowerCase());
+}
+
+/**
+ * Validates workspace slug
+ * @param slug - Slug to validate
+ * @returns Validation result with error message
+ */
+export function validateWorkspaceSlug(slug: string): { valid: boolean; error?: string } {
+  if (!slug) {
+    return { valid: false, error: 'Slug is required' };
+  }
+
+  if (slug.length < 3) {
+    return { valid: false, error: 'Slug must be at least 3 characters' };
+  }
+
+  if (slug.length > 30) {
+    return { valid: false, error: 'Slug must be 30 characters or less' };
+  }
+
+  if (!/^[a-z0-9-]+$/.test(slug)) {
+    return { valid: false, error: 'Slug can only contain lowercase letters, numbers, and hyphens' };
+  }
+
+  if (isSlugReserved(slug)) {
+    return { valid: false, error: 'This slug is reserved' };
+  }
+
+  return { valid: true };
+}

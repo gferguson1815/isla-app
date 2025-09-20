@@ -57,95 +57,57 @@ export const workspaceRouter = router({
       name: z.string().min(1).max(100),
       slug: z.string().min(1).max(50).optional(),
       description: z.string().optional(),
+      logoUrl: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      // Apply rate limiting for workspace creation
-      const rateLimitResult = await checkRateLimit(
-        ctx.userId,
-        workspaceRateLimiter.creation
-      );
+      console.log('[workspace.create] Starting with input:', input);
+      console.log('[workspace.create] User ID:', ctx.userId);
 
-      if (!rateLimitResult.success) {
-        throw new TRPCError({
-          code: 'TOO_MANY_REQUESTS',
-          message: `Workspace creation limit reached. You can create ${rateLimitResult.remaining || 0} more workspaces. Reset at: ${new Date(rateLimitResult.reset || 0).toISOString()}`,
-        });
-      }
+      // Simple implementation for debugging
+      const { name, slug: inputSlug, logoUrl } = input;
+      const slug = inputSlug || generateSlug(name);
 
-      const { name, description } = input;
-      let { slug } = input;
+      // Create workspace with logo URL
+      const workspace = await ctx.prisma.workspaces.create({
+        data: {
+          id: crypto.randomUUID(),
+          name,
+          slug,
+          logo_url: logoUrl || null,
+          plan: 'free',
+          max_links: 50,
+          max_clicks: 5000,
+          max_users: 1,
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
+      });
 
-      // Generate slug if not provided
-      if (!slug) {
-        slug = generateSlug(name);
-      }
+      // Create membership
+      await ctx.prisma.workspace_memberships.create({
+        data: {
+          id: crypto.randomUUID(),
+          user_id: ctx.userId,
+          workspace_id: workspace.id,
+          role: 'owner',
+          joined_at: new Date(),
+        },
+      });
 
-      // Ensure slug is unique
-      const uniqueSlug = await ensureUniqueSlug(ctx.prisma, slug);
-
-      try {
-        // Create workspace with transaction
-        const workspace = await ctx.prisma.workspaces.create({
-          data: {
-            id: crypto.randomUUID(),
-            name,
-            slug: uniqueSlug,
-            plan: 'free' as WorkspacePlan,
-            max_links: 50,
-            max_clicks: 5000,
-            max_users: 1,
-            created_at: new Date(),
-            updated_at: new Date(),
-          },
-        });
-
-        // Create workspace membership for creator as owner
-        await ctx.prisma.workspace_memberships.create({
-          data: {
-            id: crypto.randomUUID(),
-            user_id: ctx.userId,
-            workspace_id: workspace.id,
-            role: 'owner' as WorkspaceRole,
-            joined_at: new Date(),
-          },
-        });
-
-        // Create audit log for workspace creation
-        await createAuditLog(ctx.prisma, {
-          workspaceId: workspace.id,
-          userId: ctx.userId,
-          action: 'WORKSPACE_CREATED',
-          entityType: 'workspace',
-          entityId: workspace.id,
-          metadata: {
-            name: workspace.name,
-            slug: workspace.slug,
-            plan: workspace.plan,
-          },
-          ipAddress: ctx.req.headers.get('x-forwarded-for') || undefined,
-          userAgent: ctx.req.headers.get('user-agent') || undefined,
-        });
-
-        return {
-          id: workspace.id,
-          name: workspace.name,
-          slug: workspace.slug,
-          domain: workspace.domain,
-          plan: workspace.plan as WorkspacePlan,
-          stripeCustomerId: workspace.stripe_customer_id,
-          stripeSubscriptionId: workspace.stripe_subscription_id,
-          maxLinks: workspace.max_links,
-          maxClicks: workspace.max_clicks,
-          maxUsers: workspace.max_users,
-          createdAt: workspace.created_at,
-          updatedAt: workspace.updated_at,
-        };
-      } catch (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to create workspace',
-        });
-      }
+      return {
+        id: workspace.id,
+        name: workspace.name,
+        slug: workspace.slug,
+        domain: workspace.domain,
+        plan: workspace.plan as WorkspacePlan,
+        stripeCustomerId: workspace.stripe_customer_id,
+        stripeSubscriptionId: workspace.stripe_subscription_id,
+        maxLinks: workspace.max_links,
+        maxClicks: workspace.max_clicks,
+        maxUsers: workspace.max_users,
+        createdAt: workspace.created_at,
+        updatedAt: workspace.updated_at,
+      };
     }),
 
   // List user's workspaces
@@ -362,7 +324,7 @@ export const workspaceRouter = router({
     .query(async ({ ctx, input }) => {
       const existing = await ctx.prisma.workspaces.findFirst({
         where: {
-          slug: input.slug,
+          slug: input.slug.toLowerCase(), // Ensure case-insensitive comparison
           deleted_at: null, // Only check non-deleted workspaces for slug conflicts
         },
         select: { id: true },

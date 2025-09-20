@@ -1,167 +1,137 @@
 # Onboarding Page Requirements
 
 ## Page Overview
-**URL**: `/onboarding`
-**Purpose**: Guide new users through workspace creation and initial setup
-**When Shown**: First-time users after signup, or users with no workspaces
+**URL**: `/onboarding/workspace`
+**Purpose**: Guide new users through workspace creation (Step 2 of multi-step onboarding)
+**When Shown**: After welcome page (/onboarding/welcome), for users with no workspaces
+**Approach**: Multi-step onboarding with each step as a separate story
 
 ---
 
 ## 📝 Requirements To Be Gathered
 
 ### Step 1: Visual Design Requirements
-Please provide your preferences or screenshots for:
+✅ **CONFIRMED** (Based on Dub.co pattern):
 
 1. **Overall Layout**
-   - [ ] Full-screen design with gradient background
-   - [ ] Centered card/modal design
-   - [ ] Split-screen with illustration
-   - [ ] Minimal clean design
+   - [x] Full-screen design with gradient background (Aurora background from welcome page)
+   - [x] Centered white card with form
+   - [x] Consistent with welcome page template
 
 2. **Branding Elements**
-   - [ ] Show Isla logo where?
-   - [ ] Use brand colors (specify hex codes)
-   - [ ] Include tagline/welcome message
-   - [ ] Add illustrations or just text
+   - [x] Show Isla logo at top of card
+   - [x] Maintain aurora gradient background
+   - [x] "Create your workspace" heading
+   - [x] Subheading: "Set up a shared space to manage your links with your team. Learn more."
 
 3. **Form Style**
-   - [ ] Input field style (rounded, square, underlined)
-   - [ ] Button style (primary color, size, rounded?)
-   - [ ] Error message placement (below field, tooltip, banner)
-   - [ ] Loading states (spinner, progress bar, button state)
+   - [x] Input fields: Rounded corners, gray border
+   - [x] Button: Black background, white text, rounded, full width
+   - [x] Error messages: Below field inline
+   - [x] Loading states: Button state change with spinner
 
 ---
 
 ### Step 2: Workspace Creation Fields
-
-Please specify which fields are needed:
+✅ **CONFIRMED**:
 
 **Required Fields:**
-- [ ] Workspace Name
-  - Min length: ___
-  - Max length: ___
-  - Allow special characters? Yes/No
-  - Example placeholder: ___
+- [x] Workspace Name
+  - Min length: 1
+  - Max length: 50
+  - Allow special characters? Yes
+  - Example placeholder: "Acme, Inc."
 
-- [ ] Workspace URL/Slug
-  - Auto-generate from name? Yes/No
-  - Editable? Yes/No
-  - Format: `app.isla.sh/____` or `____.isla.sh`
-  - Allowed characters: [a-z0-9-] only?
+- [x] Workspace URL/Slug
+  - Auto-generate from name? Yes
+  - Editable? Yes
+  - Format: `app.isla.so/[slug]`
+  - Allowed characters: lowercase letters (a-z), numbers (0-9), hyphens (-) only
+  - Auto-transformation: Convert to lowercase, replace spaces with hyphens, remove special characters
+  - Helper text: "You can change this later in your workspace settings."
+
+- [x] Workspace Logo
+  - Upload image button
+  - Recommended size: 160x160px
+  - Preview after upload
+  - Required for this step
 
 **Optional Fields:**
-- [ ] Workspace Description
-  - Max length: ___
-  - Purpose: ___
-
-- [ ] Industry/Use Case
-  - Options: ___
-  - Purpose: ___
-
-- [ ] Company Size
-  - Options: [Solo, 2-10, 11-50, 51-200, 200+]
-  - Purpose: ___
-
-- [ ] Primary Use Case
-  - Options: [Marketing, Sales, Support, Personal, Other]
-  - Purpose: ___
+- Not included in this step
 
 ---
 
 ### Step 3: Validation Rules
-
-Please specify validation requirements:
+✅ **CONFIRMED**:
 
 1. **Workspace Name**
-   - [ ] Required
-   - [ ] Min ___ characters
-   - [ ] Max ___ characters
-   - [ ] Unique per user? Yes/No
+   - [x] Required
+   - [x] Min 1 character
+   - [x] Max 50 characters
+   - [x] Not necessarily unique (multiple workspaces can have same display name)
 
 2. **Workspace Slug**
-   - [ ] Must be globally unique
-   - [ ] Min ___ characters
-   - [ ] Max ___ characters
-   - [ ] Reserved words: [admin, api, app, www, support, help, ...]
-   - [ ] Check availability in real-time? Yes/No
-   - [ ] Suggest alternatives if taken? Yes/No
+   - [x] Must be globally unique
+   - [x] Min 3 characters
+   - [x] Max 30 characters
+   - [x] Reserved words: [admin, api, app, www, support, help, docs, blog, status]
+   - [x] Check availability in real-time? Yes
+   - [x] Auto-generate from name (lowercase, hyphens for spaces, strip special chars)
+   - [x] Allow manual editing but enforce URL-safe characters only
 
 3. **Error Messages**
-   - Workspace name required: "___"
-   - Workspace name too short: "___"
-   - Workspace name too long: "___"
-   - Slug taken: "___"
-   - Invalid slug format: "___"
+   - Workspace name required: "Please enter a workspace name"
+   - Workspace name too long: "Workspace name must be 50 characters or less"
+   - Slug taken: "This workspace URL is already taken"
+   - Invalid slug format: "Only lowercase letters, numbers, and hyphens allowed"
+   - Slug too short: "Workspace URL must be at least 3 characters"
+   - Logo required: "Please upload a workspace logo"
 
 ---
 
 ### Step 4: User Flow
+✅ **CONFIRMED**: Multi-Step Wizard
 
-Please specify the flow:
-
-**Single Page (Current)**
 ```
-/onboarding
-  ├── Welcome message
-  ├── Workspace form
-  ├── Create button
-  └── Redirect to /{workspace}/links
+/onboarding/welcome (Story 0.5.1 - DONE)
+  └── /onboarding/workspace (Story 0.5.3 - THIS STORY)
+      └── [Next steps - separate stories]
 ```
 
-**Multi-Step Wizard (Alternative)**
-```
-/onboarding
-  ├── Step 1: Welcome & Workspace Details
-  ├── Step 2: Customize (logo, colors) [optional]
-  ├── Step 3: Invite Team [optional, skippable]
-  ├── Step 4: Quick Tour [optional, skippable]
-  └── Complete → /{workspace}/links
-```
-
-Which approach? _______________
+**This Story Focus:**
+- User arrives from welcome page
+- Fills in workspace name, slug, and logo
+- Creates workspace
+- Proceeds to next onboarding step (TBD in future stories)
 
 ---
 
 ### Step 5: Additional Features
+✅ **FOR THIS STEP**:
 
-Should we include:
+- [x] **Sample Data**: Not in this step
+- [x] **Quick Tour**: Not in this step
+- [x] **Import Data**: Not in this step
+- [x] **Team Invites**: Not in this step (future story)
 
-- [ ] **Sample Data**
-  - Create example links? Yes/No
-  - How many? ___
-  - What kind? ___
-
-- [ ] **Quick Tour**
-  - Before entering workspace? Yes/No
-  - Tooltips/guided tour? Yes/No
-  - Can skip? Yes/No
-
-- [ ] **Import Data**
-  - From which services? [Bitly, Rebrandly, Short.io, CSV]
-  - On this page or later? ___
-
-- [ ] **Team Invites**
-  - Invite during onboarding? Yes/No
-  - How many? ___
-  - Required or optional? ___
+All additional features will be handled in subsequent onboarding steps as separate stories.
 
 ---
 
 ### Step 6: Success & Error States
+✅ **CONFIRMED**:
 
 **On Success:**
-- [ ] Show success message? Yes/No
-  - Message: "___"
-  - Duration: ___ seconds
-- [ ] Celebration animation? Yes/No
-- [ ] Redirect immediately? Yes/No
-- [ ] Show "Getting started" tips? Yes/No
+- [x] Show loading state on button
+- [x] Create workspace in database
+- [x] Navigate to next onboarding step
+- No celebration at this step (save for final step)
 
 **On Error:**
-- [ ] Inline error below field
-- [ ] Toast notification
-- [ ] Error banner at top
-- [ ] Shake animation on field
+- [x] Inline error below field
+- [x] Field border turns red
+- [x] Maintain form data for retry
+- [x] Focus on first field with error
 
 ---
 
@@ -202,28 +172,27 @@ Please provide screenshots or links to onboarding flows you like:
 ---
 
 ## 📊 Default Workspace Settings
-
-When creating a workspace, set these defaults:
+✅ **CONFIRMED** for workspace creation:
 
 ```javascript
 {
-  plan: 'free',        // or 'trial'?
+  plan: 'free',
   limits: {
-    max_links: ___,    // 50? 100?
-    max_clicks: ___,   // 5000? 10000?
-    max_users: ___,    // 1? 5?
-    max_domains: ___,  // 1? 3?
+    max_links: 100,
+    max_clicks: 5000,
+    max_users: 1,
+    max_domains: 1,
   },
   features: {
-    custom_domains: true/false,
-    api_access: true/false,
-    analytics: true/false,
-    team_members: true/false,
+    custom_domains: false,
+    api_access: false,
+    analytics: true,
+    team_members: false,
   },
   settings: {
-    timezone: 'auto' or specific,
-    week_starts: 'monday' or 'sunday',
-    date_format: 'MM/DD/YYYY' or 'DD/MM/YYYY',
+    timezone: 'auto', // Detect from browser
+    week_starts: 'monday',
+    date_format: 'MM/DD/YYYY',
   }
 }
 ```
@@ -232,20 +201,56 @@ When creating a workspace, set these defaults:
 
 ## ✅ Checklist for Requirements Gathering
 
-Before building, we need answers to:
+**COMPLETED** for Story 0.5.3:
 
-- [ ] Visual design preference (minimalist, branded, illustrated)
-- [ ] Single page vs multi-step wizard
-- [ ] Required vs optional fields
-- [ ] Validation rules and error messages
-- [ ] Real-time slug availability checking
-- [ ] Sample data creation
-- [ ] Tour/tutorial integration
-- [ ] Default workspace limits
-- [ ] Success/error state handling
-- [ ] Edge case handling
+- [x] Visual design: Dub.co style with Aurora background
+- [x] Multi-step wizard confirmed
+- [x] Required fields: name, slug, logo
+- [x] Validation rules defined
+- [x] Real-time slug checking: Yes
+- [x] Sample data: Not in this step
+- [x] Tour/tutorial: Not in this step
+- [x] Default workspace limits defined
+- [x] Success/error states defined
+- [x] Edge cases handled below
 
 ---
 
+## 🗄️ Storage Requirements
+
+### Supabase Storage Configuration
+✅ **CONFIRMED** - Using Supabase Storage for all file uploads:
+
+**Bucket Structure:**
+```
+workspace-logos/
+  └── {workspace_id}/
+      └── logo.{ext}  (e.g., logo.png, logo.jpg)
+```
+
+**Storage Settings:**
+- Bucket name: `workspace-logos`
+- Public bucket: Yes (logos need to be publicly accessible)
+- Max file size: 5MB
+- Allowed MIME types: `image/png`, `image/jpeg`, `image/svg+xml`, `image/webp`
+- File naming: Use workspace ID to avoid conflicts
+- CDN URL format: `{SUPABASE_URL}/storage/v1/object/public/workspace-logos/{workspace_id}/logo.{ext}`
+
+**Upload Process:**
+1. Validate file on client (type, size)
+2. Generate unique filename using workspace ID
+3. Upload to Supabase Storage
+4. Get public URL
+5. Save URL to workspace record in database
+
+**Security Considerations:**
+- Validate file type on both client and server
+- Check file size limits
+- Scan for malicious content if possible
+- Use RLS policies to control who can upload/delete
+
 ## 📝 Notes Section
-(Add any additional requirements or clarifications here as we gather them)
+- Logo upload is required during workspace creation
+- Consider adding image optimization/resizing in future
+- May want to add support for animated logos (GIF) later
+- Storage costs are minimal for logos (small files, one per workspace)
