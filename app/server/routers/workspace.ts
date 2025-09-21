@@ -146,6 +146,9 @@ export const workspaceRouter = router({
         maxLinks: membership.workspaces.max_links,
         maxClicks: membership.workspaces.max_clicks,
         maxUsers: membership.workspaces.max_users,
+        onboarding_completed: membership.workspaces.onboarding_completed,
+        onboarding_steps: membership.workspaces.onboarding_steps,
+        getting_started_dismissed: membership.workspaces.getting_started_dismissed,
         createdAt: membership.workspaces.created_at,
         updatedAt: membership.workspaces.updated_at,
         membership: {
@@ -210,6 +213,10 @@ export const workspaceRouter = router({
         maxLinks: membership.workspaces.max_links,
         maxClicks: membership.workspaces.max_clicks,
         maxUsers: membership.workspaces.max_users,
+        onboarding_completed: membership.workspaces.onboarding_completed,
+        onboarding_completed_at: membership.workspaces.onboarding_completed_at,
+        onboarding_steps: membership.workspaces.onboarding_steps,
+        getting_started_dismissed: membership.workspaces.getting_started_dismissed,
         createdAt: membership.workspaces.created_at,
         updatedAt: membership.workspaces.updated_at,
         membership: {
@@ -402,15 +409,25 @@ export const workspaceRouter = router({
       const totalPotentialMembers = currentMemberCount + pendingInvitationCount + input.emails.length;
 
       if (totalPotentialMembers > workspace.max_users) {
+        // Provide clear, actionable error messages based on plan
+        let message = '';
+        if (workspace.max_users === 1) {
+          message = `The free plan is for solo use only. Upgrade to a paid plan to invite team members.`;
+        } else if (workspace.plan === 'pro') {
+          message = `You've reached the ${workspace.max_users} member limit for the Pro plan. Upgrade to Business for unlimited team members.`;
+        } else {
+          message = `Cannot send invitations. Your workspace has reached its ${workspace.max_users} member limit.`;
+        }
+
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
-          message: `Cannot send invitations. Workspace member limit is ${workspace.max_users}`,
+          message,
         });
       }
 
       // Create invitations
       const invitations = [];
-      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+      const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
 
       for (const email of input.emails) {
         // Check if user is already a member
@@ -793,7 +810,7 @@ export const workspaceRouter = router({
       }
 
       // Update expiration date
-      const newExpiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+      const newExpiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
       await ctx.prisma.workspace_invitations.update({
         where: { id: input.invitationId },
         data: { expires_at: newExpiresAt },
@@ -991,6 +1008,36 @@ export const workspaceRouter = router({
       await ctx.prisma.workspace_memberships.update({
         where: { id: targetMembership.id },
         data: { role: input.role },
+      });
+
+      return { success: true };
+    }),
+
+  // Dismiss Getting Started widget
+  dismissGettingStarted: protectedProcedure
+    .input(z.object({
+      workspaceId: z.string().uuid(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Check if user is member of workspace
+      const membership = await ctx.prisma.workspace_memberships.findFirst({
+        where: {
+          workspace_id: input.workspaceId,
+          user_id: ctx.user.id,
+        },
+      });
+
+      if (!membership) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You are not a member of this workspace',
+        });
+      }
+
+      // Update workspace to dismiss getting started
+      await ctx.prisma.workspaces.update({
+        where: { id: input.workspaceId },
+        data: { getting_started_dismissed: true },
       });
 
       return { success: true };

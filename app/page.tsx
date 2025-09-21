@@ -10,8 +10,8 @@ export default async function Home() {
     redirect('/login');
   }
 
-  // Get user's first workspace
-  const workspace = await prisma.workspaces.findFirst({
+  // Get user's workspaces with onboarding status
+  const workspaces = await prisma.workspaces.findMany({
     where: {
       workspace_memberships: {
         some: {
@@ -25,10 +25,13 @@ export default async function Home() {
     },
   });
 
-  if (workspace) {
-    redirect(`/${workspace.slug}/links`);
+  if (workspaces.length > 0) {
+    // User has existing workspace(s) - always go directly to their workspace
+    // They should never see onboarding again after initial workspace creation
+    const firstWorkspace = workspaces[0];
+    redirect(`/${firstWorkspace.slug}/links`);
   } else {
-    // No workspace found, redirect to onboarding
-    redirect('/onboarding');
+    // No workspace found, start onboarding from beginning
+    redirect('/onboarding/welcome');
   }
 }

@@ -511,7 +511,7 @@ describe('Workspace Router', () => {
         role: 'member',
         token: randomBytes(32).toString('hex'),
         invited_by: mockUserId,
-        expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
       })
 
       // Mock inviter lookup
@@ -798,7 +798,7 @@ describe('Workspace Router', () => {
           id: 'inv2',
           email: 'user2@example.com',
           role: 'admin',
-          expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000),
+          expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
           created_at: new Date(),
           users: { name: 'Inviter', email: 'admin@example.com' },
         },

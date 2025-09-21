@@ -23,6 +23,12 @@ export const PLAN_LIMITS = {
     maxUsers: 10,
     customDomains: true,
   },
+  advanced: {
+    maxLinks: 50000,
+    maxClicks: 1000000,
+    maxUsers: 20,
+    customDomains: true,
+  },
   business: {
     maxLinks: -1, // unlimited
     maxClicks: -1, // unlimited

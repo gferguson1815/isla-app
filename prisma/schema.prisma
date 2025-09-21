@@ -188,6 +188,10 @@ model workspaces {
   max_clicks             Int                     @default(5000)
   max_users              Int                     @default(1)
   custom_limits          Json?                   // Admin overrides: {beta_user: boolean, vip_customer: boolean, temp_increases: {links: 100, expires: "2024-01-01"}}
+  onboarding_completed   Boolean                 @default(false)
+  onboarding_steps       Json?                   // Track individual steps: {workspace_created: true, team_invited: false, domain_added: false, first_link: false, plan_selected: false}
+  onboarding_completed_at DateTime?              @db.Timestamptz(6)
+  getting_started_dismissed Boolean              @default(false) // Track if user dismissed Getting Started widget
   created_at             DateTime                @default(now()) @db.Timestamptz(6)
   updated_at             DateTime                @db.Timestamptz(6)
   deleted_at             DateTime?               @db.Timestamptz(6)

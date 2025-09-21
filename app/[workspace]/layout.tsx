@@ -7,20 +7,20 @@ import { NavigationPanel } from "@/components/navigation/NavigationPanel";
 import { CommandPalette } from "@/components/command/CommandPalette";
 import { KeyboardShortcutsDialog } from "@/components/help/KeyboardShortcutsDialog";
 import { QuickCreateDialog } from "@/components/links/QuickCreateDialog";
+import { GettingStartedWidget } from "@/components/onboarding/GettingStartedWidget";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useAuth } from "@/contexts/auth-context";
 import { useWorkspace } from "@/contexts/workspace-context";
 
 export default function WorkspaceLayout({
-  children,
-  params
+  children
 }: {
   children: React.ReactNode;
-  params: { workspace: string };
 }) {
   useGlobalKeyboardShortcuts();
   const { user } = useAuth();
   const pathname = usePathname();
+  const params = useParams();
   const [activeSection, setActiveSection] = useState("");
 
   // Determine active section based on pathname
@@ -34,10 +34,10 @@ export default function WorkspaceLayout({
 
   return (
     <>
-      <div className="flex h-screen">
+      <div className="flex h-screen" style={{ backgroundColor: '#e5e5e5' }}>
         {/* Icon Sidebar - 64px */}
         <IconSidebar
-          workspaceName={params.workspace}
+          workspaceName={params.workspace as string}
           userEmail={user?.email || ""}
           userName={user?.user_metadata?.full_name}
           userAvatar={user?.user_metadata?.avatar_url}
@@ -59,6 +59,7 @@ export default function WorkspaceLayout({
       <CommandPalette />
       <KeyboardShortcutsDialog />
       <QuickCreateDialog />
+      <GettingStartedWidget />
     </>
   );
 }

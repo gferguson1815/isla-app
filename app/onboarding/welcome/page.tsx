@@ -21,6 +21,8 @@ export default function OnboardingWelcomePage() {
 
   useEffect(() => {
     if (!isLoadingWorkspaces && workspaces && workspaces.length > 0) {
+      // User already has a workspace - they shouldn't be in onboarding
+      // Redirect them to their workspace regardless of onboarding completion status
       const defaultWorkspace = workspaces[0];
       router.replace(`/${defaultWorkspace.slug}/links`);
     }

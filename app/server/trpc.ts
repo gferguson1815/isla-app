@@ -9,16 +9,38 @@ export async function createContext({
   req,
   resHeaders,
 }: FetchCreateContextFnOptions) {
-  const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
+  try {
+    const supabase = await createClient();
 
-  return {
-    supabase,
-    prisma,
-    session,
-    req,
-    resHeaders,
-  };
+    // Get the session first to check if there's a token
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      console.error('Session error:', sessionError);
+    }
+
+    // If there's a session, validate it with getUser()
+    let validatedSession = null;
+    if (session) {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (!error && user) {
+        validatedSession = { ...session, user };
+      } else if (error) {
+        console.error('User validation error:', error);
+      }
+    }
+
+    return {
+      supabase,
+      prisma,
+      session: validatedSession,
+      req,
+      resHeaders,
+    };
+  } catch (error) {
+    console.error('Context creation error:', error);
+    throw error;
+  }
 }
 
 export type Context = Awaited<ReturnType<typeof createContext>>;
@@ -42,8 +64,15 @@ export const middleware = t.middleware;
 export const publicProcedure = t.procedure;
 
 export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
+  console.log('Protected procedure check:', {
+    hasSession: !!ctx.session,
+    hasUser: !!ctx.session?.user,
+    userId: ctx.session?.user?.id
+  });
+
   if (!ctx.session || !ctx.session.user) {
-    throw new TRPCError({ code: 'UNAUTHORIZED' });
+    console.error('Unauthorized access attempt - no session or user');
+    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Authentication required' });
   }
 
   return next({

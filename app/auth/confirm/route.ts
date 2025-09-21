@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   const token_hash = requestUrl.searchParams.get('token_hash')
   const type = requestUrl.searchParams.get('type')
   const code = requestUrl.searchParams.get('code')
-  const next = requestUrl.searchParams.get('next') ?? '/dashboard'
+  const next = requestUrl.searchParams.get('next') ?? '/'
 
   const supabase = await createClient()
 
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // OAuth successful, redirect to dashboard
+    // OAuth successful, redirect to next page or root
     return NextResponse.redirect(new URL(next, requestUrl.origin))
   }
 

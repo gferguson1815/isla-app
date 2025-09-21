@@ -27,7 +27,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <div className="flex h-screen">
+      <div className="flex h-screen" style={{ backgroundColor: '#e5e5e5' }}>
         {/* Icon Sidebar - 64px */}
         <IconSidebar
           workspaceName="Isla"

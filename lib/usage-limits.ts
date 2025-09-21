@@ -31,6 +31,16 @@ export const PLAN_FEATURES = {
     support: 'Priority',
     apiAccess: true,
   },
+  advanced: {
+    name: 'Advanced',
+    maxLinks: 50000,
+    maxClicks: 1000000,
+    maxUsers: 20,
+    customDomains: true,
+    analytics: 'Enterprise',
+    support: 'Priority',
+    apiAccess: true,
+  },
   business: {
     name: 'Business',
     maxLinks: -1, // unlimited
@@ -144,7 +154,7 @@ export function getSuggestedPlan(
   metric: 'links' | 'clicks' | 'users',
   requiredAmount: number
 ): PlanType | null {
-  const plans: PlanType[] = ['free', 'starter', 'pro', 'business']
+  const plans: PlanType[] = ['free', 'starter', 'pro', 'advanced', 'business']
   const currentIndex = plans.indexOf(currentPlan)
   
   for (let i = currentIndex + 1; i < plans.length; i++) {
