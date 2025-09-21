@@ -9,6 +9,7 @@ datasource db {
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model analytics_aggregates {
   id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   link_id                 String?   @db.Uuid
@@ -28,6 +29,29 @@ model analytics_aggregates {
   @@unique([link_id, period, period_start], map: "unique_link_period_start")
   @@index([link_id, period, period_start], map: "idx_analytics_aggregates_link_period")
   @@index([period_start], map: "idx_analytics_aggregates_period_start")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model audit_logs {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id String     @db.Uuid
+  user_id      String?    @db.Uuid
+  action       String     @db.VarChar(100)
+  entity_type  String     @db.VarChar(50)
+  entity_id    String?    @db.VarChar(255)
+  metadata     Json?
+  ip_address   String?    @db.Inet
+  user_agent   String?
+  created_at   DateTime   @default(now()) @db.Timestamptz(6)
+  users        users?     @relation(fields: [user_id], references: [id])
+  workspaces   workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@index([action])
+  @@index([created_at(sort: Desc)])
+  @@index([entity_type, entity_id])
+  @@index([user_id])
+  @@index([workspace_id])
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -76,6 +100,27 @@ model click_events {
   @@index([timestamp])
 }
 
+model domains {
+  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id       String     @db.Uuid
+  domain             String     @unique
+  status             String     @default("pending") @db.VarChar(20)
+  verification_token String?    @db.VarChar(255)
+  verified_at        DateTime?  @db.Timestamptz(6)
+  is_primary         Boolean    @default(false)
+  ssl_status         String?    @db.VarChar(20)
+  dns_configured     Boolean    @default(false)
+  created_by         String     @db.Uuid
+  created_at         DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime   @default(now()) @db.Timestamptz(6)
+  users              users      @relation(fields: [created_by], references: [id])
+  workspaces         workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@index([domain])
+  @@index([status])
+  @@index([workspace_id])
+}
+
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model folders {
   id            String     @id @db.Uuid
@@ -95,11 +140,50 @@ model folders {
   @@index([workspace_id])
 }
 
+model invoices {
+  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id       String     @db.Uuid
+  stripe_invoice_id  String     @unique
+  invoice_number     String?
+  amount_due         Int
+  amount_paid        Int
+  amount_remaining   Int        @default(0)
+  currency           String     @default("usd") @db.VarChar(3)
+  status             String     @db.VarChar(50)
+  due_date           DateTime?  @db.Timestamptz(6)
+  paid_at            DateTime?  @db.Timestamptz(6)
+  invoice_pdf        String?
+  hosted_invoice_url String?
+  created_at         DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime   @default(now()) @db.Timestamptz(6)
+  workspaces         workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@index([due_date])
+  @@index([status])
+  @@index([workspace_id])
+}
+
+model link_imports {
+  id            String     @id @db.Uuid
+  workspace_id  String     @db.Uuid
+  file_name     String
+  total_rows    Int
+  success_count Int
+  error_count   Int
+  status        String     @db.VarChar(20)
+  created_by    String     @db.Uuid
+  created_at    DateTime   @default(now()) @db.Timestamptz(6)
+  workspaces    workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  links         links[]
+
+  @@index([created_at])
+  @@index([workspace_id])
+}
+
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model links {
   id                      String                 @id @db.Uuid
   workspace_id            String                 @db.Uuid
-  created_by              String                 @db.Uuid
   folder_id               String?                @db.Uuid
   campaign_id             String?                @db.Uuid
   slug                    String                 @unique
@@ -114,7 +198,6 @@ model links {
   click_limit             Int?
   click_count             Int                    @default(0)
   last_clicked_at         DateTime?              @db.Timestamptz(6)
-  tags                    String[]               @default([])
   utm_source              String?
   utm_medium              String?
   utm_campaign            String?
@@ -124,22 +207,95 @@ model links {
   android_url             String?
   enable_geolocation      Boolean                @default(false)
   enable_device_targeting Boolean                @default(false)
-  import_id               String?                @db.Uuid
   created_at              DateTime               @default(now()) @db.Timestamptz(6)
   updated_at              DateTime               @db.Timestamptz(6)
+  created_by              String                 @db.Uuid
+  tags                    String[]               @default([])
   deleted_at              DateTime?              @db.Timestamptz(6)
+  import_id               String?                @db.Uuid
   analytics_aggregates    analytics_aggregates[]
   click_events            click_events[]
   campaigns               campaigns?             @relation(fields: [campaign_id], references: [id])
-  folders                 folders?               @relation(fields: [folder_id], references: [id])
-  workspaces              workspaces             @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
-  link_imports            link_imports?          @relation(fields: [import_id], references: [id], onDelete: SetNull)
   users                   users                  @relation(fields: [created_by], references: [id])
+  folders                 folders?               @relation(fields: [folder_id], references: [id])
+  link_imports            link_imports?          @relation(fields: [import_id], references: [id])
+  workspaces              workspaces             @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
 
   @@index([campaign_id])
   @@index([created_by])
   @@index([folder_id])
   @@index([slug])
+  @@index([workspace_id])
+}
+
+model payment_methods {
+  id                       String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id             String     @db.Uuid
+  stripe_payment_method_id String     @unique
+  type                     String     @db.VarChar(20)
+  card_brand               String?    @db.VarChar(20)
+  card_last4               String?    @db.VarChar(4)
+  card_exp_month           Int?
+  card_exp_year            Int?
+  is_default               Boolean    @default(false)
+  created_at               DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime   @default(now()) @db.Timestamptz(6)
+  workspaces               workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@index([is_default])
+  @@index([workspace_id])
+}
+
+model subscriptions {
+  id                     String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id           String     @unique @db.Uuid
+  stripe_subscription_id String     @unique
+  stripe_price_id        String
+  status                 String
+  current_period_start   DateTime   @db.Timestamptz(6)
+  current_period_end     DateTime   @db.Timestamptz(6)
+  cancel_at_period_end   Boolean    @default(false)
+  canceled_at            DateTime?  @db.Timestamptz(6)
+  trial_start            DateTime?  @db.Timestamptz(6)
+  trial_end              DateTime?  @db.Timestamptz(6)
+  created_at             DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime   @default(now()) @db.Timestamptz(6)
+  workspaces             workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@index([current_period_end])
+  @@index([status])
+  @@index([workspace_id])
+}
+
+model tags {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id String     @db.Uuid
+  name         String     @db.VarChar(50)
+  usage_count  Int        @default(0)
+  created_at   DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime   @default(now()) @db.Timestamptz(6)
+  workspaces   workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@unique([workspace_id, name], map: "workspace_id_name")
+  @@index([name])
+  @@index([workspace_id])
+}
+
+model usage_metrics {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id String     @db.Uuid
+  metric_type  String     @db.VarChar(50)
+  value        Int        @default(0)
+  period       String     @db.VarChar(20)
+  period_start DateTime   @db.Timestamptz(6)
+  period_end   DateTime   @db.Timestamptz(6)
+  created_at   DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime   @default(now()) @db.Timestamptz(6)
+  workspaces   workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@unique([workspace_id, metric_type, period, period_start], map: "unique_workspace_metric_period")
+  @@index([metric_type])
+  @@index([period_start, period_end])
   @@index([workspace_id])
 }
 
@@ -153,68 +309,12 @@ model users {
   created_at            DateTime                @default(now()) @db.Timestamptz(6)
   updated_at            DateTime                @db.Timestamptz(6)
   audit_logs            audit_logs[]
+  domains               domains[]
   links                 links[]
   workspace_invitations workspace_invitations[]
   workspace_memberships workspace_memberships[]
-  domains               domains[]
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model workspace_memberships {
-  id           String     @id @db.Uuid
-  user_id      String     @db.Uuid
-  workspace_id String     @db.Uuid
-  role         String     @default("member")
-  joined_at    DateTime   @default(now()) @db.Timestamptz(6)
-  users        users      @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  workspaces   workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
-
-  @@unique([user_id, workspace_id])
-  @@index([user_id])
-  @@index([workspace_id])
-}
-
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model workspaces {
-  id                     String                  @id @db.Uuid
-  name                   String
-  slug                   String                  @unique
-  logo_url               String?
-  domain                 String?
-  plan                   String                  @default("free")
-  stripe_customer_id     String?                 @unique
-  stripe_subscription_id String?                 @unique
-  max_links              Int                     @default(50)
-  max_clicks             Int                     @default(5000)
-  max_users              Int                     @default(1)
-  custom_limits          Json?                   // Admin overrides: {beta_user: boolean, vip_customer: boolean, temp_increases: {links: 100, expires: "2024-01-01"}}
-  onboarding_completed   Boolean                 @default(false)
-  onboarding_steps       Json?                   // Track individual steps: {workspace_created: true, team_invited: false, domain_added: false, first_link: false, plan_selected: false}
-  onboarding_completed_at DateTime?              @db.Timestamptz(6)
-  getting_started_dismissed Boolean              @default(false) // Track if user dismissed Getting Started widget
-  created_at             DateTime                @default(now()) @db.Timestamptz(6)
-  updated_at             DateTime                @db.Timestamptz(6)
-  deleted_at             DateTime?               @db.Timestamptz(6)
-  audit_logs             audit_logs[]
-  campaigns              campaigns[]
-  folders                folders[]
-  links                  links[]
-  utm_templates          utm_templates[]
-  workspace_invitations  workspace_invitations[]
-  workspace_memberships  workspace_memberships[]
-  subscriptions          subscriptions?
-  usage_metrics          usage_metrics[]
-  invoices               invoices[]
-  payment_methods        payment_methods[]
-  link_imports           link_imports[]
-  tags                   tags[]
-  domains                domains[]
-
-  @@index([slug])
-  @@index([deleted_at])
-}
-
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model utm_templates {
   id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   workspace_id String     @db.Uuid
@@ -233,7 +333,6 @@ model utm_templates {
   @@index([workspace_id])
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model workspace_invitations {
   id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   workspace_id String     @db.Uuid
@@ -248,168 +347,64 @@ model workspace_invitations {
   users        users      @relation(fields: [invited_by], references: [id])
   workspaces   workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
 
-  @@index([workspace_id])
   @@index([email])
-  @@index([token])
   @@index([expires_at])
+  @@index([token])
+  @@index([workspace_id])
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model audit_logs {
-  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+model workspace_memberships {
+  id           String     @id @db.Uuid
+  user_id      String     @db.Uuid
   workspace_id String     @db.Uuid
-  user_id      String?    @db.Uuid
-  action       String     @db.VarChar(100)
-  entity_type  String     @db.VarChar(50)
-  entity_id    String?    @db.VarChar(255)
-  metadata     Json?
-  ip_address   String?    @db.Inet
-  user_agent   String?
-  created_at   DateTime   @default(now()) @db.Timestamptz(6)
-  users        users?     @relation(fields: [user_id], references: [id])
+  role         String     @default("member")
+  joined_at    DateTime   @default(now()) @db.Timestamptz(6)
+  users        users      @relation(fields: [user_id], references: [id], onDelete: Cascade)
   workspaces   workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
 
-  @@index([workspace_id])
+  @@unique([user_id, workspace_id])
   @@index([user_id])
-  @@index([action])
-  @@index([created_at(sort: Desc)])
-  @@index([entity_type, entity_id])
+  @@index([workspace_id])
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model subscriptions {
-  id                     String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspace_id           String     @unique @db.Uuid
-  stripe_subscription_id String     @unique
-  stripe_price_id        String
-  status                 String
-  current_period_start   DateTime   @db.Timestamptz(6)
-  current_period_end     DateTime   @db.Timestamptz(6)
-  cancel_at_period_end   Boolean    @default(false)
-  canceled_at            DateTime?  @db.Timestamptz(6)
-  trial_start            DateTime?  @db.Timestamptz(6)
-  trial_end              DateTime?  @db.Timestamptz(6)
-  created_at             DateTime   @default(now()) @db.Timestamptz(6)
-  updated_at             DateTime   @default(now()) @db.Timestamptz(6)
-  workspaces             workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+model workspaces {
+  id                        String                  @id @db.Uuid
+  name                      String
+  slug                      String                  @unique
+  domain                    String?
+  plan                      String                  @default("free")
+  stripe_customer_id        String?                 @unique
+  stripe_subscription_id    String?                 @unique
+  max_links                 Int                     @default(50)
+  max_clicks                Int                     @default(5000)
+  max_users                 Int                     @default(1)
+  created_at                DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                @db.Timestamptz(6)
+  deleted_at                DateTime?               @db.Timestamptz(6)
+  custom_limits             Json?
+  logo_url                  String?
+  onboarding_completed      Boolean                 @default(false)
+  onboarding_completed_at   DateTime?               @db.Timestamptz(6)
+  onboarding_steps          Json?
+  getting_started_dismissed Boolean                 @default(false)
+  audit_logs                audit_logs[]
+  campaigns                 campaigns[]
+  domains                   domains[]
+  folders                   folders[]
+  invoices                  invoices[]
+  link_imports              link_imports[]
+  links                     links[]
+  payment_methods           payment_methods[]
+  subscriptions             subscriptions?
+  tags                      tags[]
+  usage_metrics             usage_metrics[]
+  utm_templates             utm_templates[]
+  workspace_invitations     workspace_invitations[]
+  workspace_memberships     workspace_memberships[]
 
-  @@index([workspace_id])
-  @@index([status])
-  @@index([current_period_end])
-}
-
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model usage_metrics {
-  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspace_id String     @db.Uuid
-  metric_type  String     @db.VarChar(50) // 'links', 'clicks', 'users'
-  value        Int        @default(0)
-  period       String     @db.VarChar(20) // 'daily', 'monthly', 'lifetime'
-  period_start DateTime   @db.Timestamptz(6)
-  period_end   DateTime   @db.Timestamptz(6)
-  created_at   DateTime   @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime   @default(now()) @db.Timestamptz(6)
-  workspaces   workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
-
-  @@unique([workspace_id, metric_type, period, period_start], map: "unique_workspace_metric_period")
-  @@index([workspace_id])
-  @@index([metric_type])
-  @@index([period_start, period_end])
-}
-
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model invoices {
-  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspace_id      String     @db.Uuid
-  stripe_invoice_id String     @unique
-  invoice_number    String?
-  amount_due        Int        // In cents
-  amount_paid       Int        // In cents
-  amount_remaining  Int        @default(0) // In cents
-  currency          String     @default("usd") @db.VarChar(3)
-  status            String     @db.VarChar(50) // 'draft', 'open', 'paid', 'void', 'uncollectible'
-  due_date          DateTime?  @db.Timestamptz(6)
-  paid_at           DateTime?  @db.Timestamptz(6)
-  invoice_pdf       String?    // URL to PDF
-  hosted_invoice_url String?   // Stripe hosted invoice page
-  created_at        DateTime   @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime   @default(now()) @db.Timestamptz(6)
-  workspaces        workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
-
-  @@index([workspace_id])
-  @@index([status])
-  @@index([due_date])
-}
-
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model payment_methods {
-  id                       String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspace_id             String     @db.Uuid
-  stripe_payment_method_id String     @unique
-  type                     String     @db.VarChar(20) // 'card', 'bank_account', etc.
-  card_brand               String?    @db.VarChar(20) // 'visa', 'mastercard', 'amex', etc.
-  card_last4               String?    @db.VarChar(4)
-  card_exp_month           Int?
-  card_exp_year            Int?
-  is_default               Boolean    @default(false)
-  created_at               DateTime   @default(now()) @db.Timestamptz(6)
-  updated_at               DateTime   @default(now()) @db.Timestamptz(6)
-  workspaces               workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
-
-  @@index([workspace_id])
-  @@index([is_default])
-}
-
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model link_imports {
-  id            String     @id @db.Uuid
-  workspace_id  String     @db.Uuid
-  file_name     String
-  total_rows    Int
-  success_count Int
-  error_count   Int
-  status        String     @db.VarChar(20) // processing, completed, partial, failed, undone
-  created_by    String     @db.Uuid
-  created_at    DateTime   @default(now()) @db.Timestamptz(6)
-  links         links[]
-  workspaces    workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
-
-  @@index([workspace_id])
-  @@index([created_at])
-}
-
-model tags {
-  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspace_id String     @db.Uuid
-  name         String     @db.VarChar(50)
-  usage_count  Int        @default(0)
-  created_at   DateTime   @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime   @default(now()) @db.Timestamptz(6)
-  workspaces   workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
-
-  @@unique([workspace_id, name], map: "workspace_id_name")
-  @@index([workspace_id])
-  @@index([name])
-}
-
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model domains {
-  id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspace_id        String     @db.Uuid
-  domain              String     @unique
-  status              String     @default("pending") @db.VarChar(20) // pending, verified, failed
-  verification_token  String?    @db.VarChar(255)
-  verified_at         DateTime?  @db.Timestamptz(6)
-  is_primary          Boolean    @default(false)
-  ssl_status          String?    @db.VarChar(20) // pending, active, failed
-  dns_configured      Boolean    @default(false)
-  created_by          String     @db.Uuid
-  created_at          DateTime   @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime   @default(now()) @db.Timestamptz(6)
-  workspaces          workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
-  users               users      @relation(fields: [created_by], references: [id])
-
-  @@index([workspace_id])
-  @@index([domain])
-  @@index([status])
+  @@index([deleted_at])
+  @@index([slug])
 }
