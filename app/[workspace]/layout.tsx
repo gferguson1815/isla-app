@@ -11,6 +11,7 @@ import { GettingStartedWidget } from "@/components/onboarding/GettingStartedWidg
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useAuth } from "@/contexts/auth-context";
 import { useWorkspace } from "@/contexts/workspace-context";
+import { trpc } from "@/lib/trpc/client";
 
 export default function WorkspaceLayout({
   children
@@ -22,6 +23,13 @@ export default function WorkspaceLayout({
   const pathname = usePathname();
   const params = useParams();
   const [activeSection, setActiveSection] = useState("");
+  const workspaceSlug = params.workspace as string;
+
+  // Fetch workspace data to get logo
+  const { data: workspace } = trpc.workspace.getBySlug.useQuery(
+    { slug: workspaceSlug },
+    { enabled: !!workspaceSlug }
+  );
 
   // Determine active section based on pathname
   useEffect(() => {
@@ -37,7 +45,8 @@ export default function WorkspaceLayout({
       <div className="flex h-screen" style={{ backgroundColor: '#e5e5e5' }}>
         {/* Icon Sidebar - 64px */}
         <IconSidebar
-          workspaceName={params.workspace as string}
+          workspaceLogo={workspace?.logo_url || undefined}
+          workspaceName={workspace?.name || params.workspace as string}
           userEmail={user?.email || ""}
           userName={user?.user_metadata?.full_name}
           userAvatar={user?.user_metadata?.avatar_url}

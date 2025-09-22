@@ -206,6 +206,7 @@ export const workspaceRouter = router({
         id: membership.workspaces.id,
         name: membership.workspaces.name,
         slug: membership.workspaces.slug,
+        logo_url: membership.workspaces.logo_url,
         domain: membership.workspaces.domain,
         plan: membership.workspaces.plan as WorkspacePlan,
         stripeCustomerId: membership.workspaces.stripe_customer_id,

@@ -145,7 +145,7 @@ export function NavigationPanel({ activeSection }: NavigationPanelProps) {
     <div className="flex flex-col w-56 h-[calc(100vh-16px)] my-2 rounded-lg shadow-sm" style={{ backgroundColor: '#F5F5F5' }}>
       {/* Section Header */}
       <div className="h-14 flex items-center justify-between px-4">
-        <h2 className="text-xl font-semibold text-gray-900">{sectionContent.title}</h2>
+        <h2 className="text-lg font-semibold text-gray-900">{sectionContent.title}</h2>
       </div>
 
       {/* Navigation Sections */}
@@ -165,7 +165,7 @@ export function NavigationPanel({ activeSection }: NavigationPanelProps) {
                     href={item.href}
                     className={`flex items-center justify-between rounded-md px-2.5 py-2 text-sm transition-colors ${
                       isActive(item.href)
-                        ? "bg-blue-50 text-blue-600"
+                        ? "bg-gray-200 text-gray-900 font-medium"
                         : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
                     }`}
                   >
@@ -173,7 +173,7 @@ export function NavigationPanel({ activeSection }: NavigationPanelProps) {
                       {item.icon && <item.icon className="h-3.5 w-3.5" />}
                       <span>{item.label}</span>
                       {item.badge && (
-                        <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
+                        <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-700">
                           {item.badge}
                         </span>
                       )}

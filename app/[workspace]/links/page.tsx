@@ -35,7 +35,7 @@ export default function LinksPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-auto p-0 font-semibold text-xl hover:bg-transparent focus:ring-0 focus:ring-offset-0 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 border-0"
+                className="h-auto p-0 font-semibold text-lg hover:bg-transparent focus:ring-0 focus:ring-offset-0 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 border-0"
               >
                 Links
                 <ChevronsUpDown className="ml-1 h-4 w-4 text-gray-400" />

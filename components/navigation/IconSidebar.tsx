@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import Image from "next/image";
+import { usePathname, useRouter, useParams } from "next/navigation";
 import {
   Link as LinkIcon,
   Users2,
@@ -52,7 +53,9 @@ export function IconSidebar({
 }: IconSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const params = useParams();
   const [helpSearchQuery, setHelpSearchQuery] = useState("");
+  const workspaceSlug = params.workspace as string;
 
   // Determine active section
   const isShortLinksActive = pathname.startsWith("/links") ||
@@ -92,21 +95,41 @@ export function IconSidebar({
 
   return (
     <div className="flex h-screen w-16 flex-col items-center border-r border-gray-200" style={{ backgroundColor: '#e5e5e5' }}>
-      {/* Site Name - aligned with nav panel header */}
-      <div className="h-[72px] flex items-center justify-center">
-        <span className="text-xl font-semibold text-gray-900">isla</span>
-      </div>
+      {/* Site Logo - aligned with nav panel header */}
+      <Link
+        href={workspaceSlug ? `/${workspaceSlug}/links` : "/dashboard"}
+        className="h-[72px] flex items-center justify-center hover:opacity-80 transition-opacity"
+      >
+        <Image
+          src="/images/logos/isla-wordmark-black.svg"
+          alt="Isla"
+          width={48}
+          height={48}
+          priority
+          className="cursor-pointer"
+        />
+      </Link>
 
       {/* Workspace Icon */}
       <TooltipProvider delayDuration={0}>
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="mb-3 flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg transition-all hover:bg-gray-100 hover:scale-110">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white">
-                <span className="text-xs font-semibold">
-                  {workspaceName[0].toUpperCase()}
-                </span>
-              </div>
+              {workspaceLogo ? (
+                <div className="flex h-7 w-7 items-center justify-center rounded-full overflow-hidden">
+                  <img
+                    src={workspaceLogo}
+                    alt={workspaceName}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white">
+                  <span className="text-xs font-semibold">
+                    {workspaceName[0].toUpperCase()}
+                  </span>
+                </div>
+              )}
             </div>
           </TooltipTrigger>
           <TooltipContent side="right" className="text-xs">
