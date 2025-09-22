@@ -6,7 +6,7 @@ import Image from "next/image";
 import { usePathname, useRouter, useParams } from "next/navigation";
 import {
   Link as LinkIcon,
-  Users2,
+  Handshake,
   Gift,
   HelpCircle,
   User,
@@ -116,7 +116,7 @@ export function IconSidebar({
           <TooltipTrigger asChild>
             <div className="mb-3 flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg transition-all hover:bg-gray-100 hover:scale-110">
               {workspaceLogo ? (
-                <div className="flex h-7 w-7 items-center justify-center rounded-full overflow-hidden">
+                <div className="flex h-8 w-8 items-center justify-center rounded-md overflow-hidden">
                   <img
                     src={workspaceLogo}
                     alt={workspaceName}
@@ -124,8 +124,8 @@ export function IconSidebar({
                   />
                 </div>
               ) : (
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white">
-                  <span className="text-xs font-semibold">
+                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-gradient-to-br from-violet-500 to-purple-600 text-white">
+                  <span className="text-sm font-semibold">
                     {workspaceName[0].toUpperCase()}
                   </span>
                 </div>
@@ -134,6 +134,7 @@ export function IconSidebar({
           </TooltipTrigger>
           <TooltipContent side="right" className="text-xs">
             {workspaceName}
+            {workspaceLogo && <div className="text-[10px] text-gray-400 mt-1">Logo URL: {workspaceLogo}</div>}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -144,22 +145,22 @@ export function IconSidebar({
           <TooltipTrigger asChild>
             <Link
               href="/links"
-              className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg transition-all hover:scale-110 ${
+              className={`group mb-3 flex h-10 w-10 items-center justify-center rounded-lg transition-all hover:scale-110 ${
                 isShortLinksActive
                   ? "bg-white shadow-sm"
                   : "hover:bg-gray-100"
               }`}
             >
-              <LinkIcon className={`h-4 w-4 ${isShortLinksActive ? "text-gray-900" : "text-gray-600"}`} />
+              <LinkIcon className={`h-5 w-5 transition-all duration-300 group-hover:rotate-[360deg] group-hover:scale-110 ${isShortLinksActive ? "text-gray-900" : "text-gray-600"}`} />
             </Link>
           </TooltipTrigger>
           <TooltipContent side="right">
-            <div className="w-48">
-              <div className="mb-1 font-medium">Short Links</div>
-              <div className="text-xs text-gray-500">
+            <div>
+              <div className="mb-1 font-semibold text-sm">Short Links</div>
+              <div className="text-xs text-gray-300 mb-2">
                 Create, organize, and measure the performance of your short links.
               </div>
-              <Link href="/learn-more" className="mt-2 inline-block text-xs font-medium underline">
+              <Link href="/learn-more" className="inline-block text-xs font-medium underline text-white hover:text-gray-200">
                 Learn more
               </Link>
             </div>
@@ -173,22 +174,22 @@ export function IconSidebar({
           <TooltipTrigger asChild>
             <Link
               href="/partners"
-              className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg transition-all hover:scale-110 ${
+              className={`group mb-3 flex h-10 w-10 items-center justify-center rounded-lg transition-all hover:scale-110 ${
                 isPartnerProgramActive
                   ? "bg-white shadow-sm"
                   : "hover:bg-gray-100"
               }`}
             >
-              <Users2 className={`h-4 w-4 ${isPartnerProgramActive ? "text-gray-900" : "text-gray-600"}`} />
+              <Handshake className={`h-5 w-5 transition-all duration-300 group-hover:scale-125 group-hover:-translate-y-0.5 ${isPartnerProgramActive ? "text-gray-900" : "text-gray-600"}`} />
             </Link>
           </TooltipTrigger>
           <TooltipContent side="right">
-            <div className="w-48">
-              <div className="mb-1 font-medium">Partner Program</div>
-              <div className="text-xs text-gray-500">
+            <div>
+              <div className="mb-1 font-semibold text-sm">Partner Program</div>
+              <div className="text-xs text-gray-300 mb-2">
                 Kickstart viral product-led growth with powerful, branded referral and affiliate programs.
               </div>
-              <Link href="/learn-more" className="mt-2 inline-block text-xs font-medium underline">
+              <Link href="/learn-more" className="inline-block text-xs font-medium underline text-white hover:text-gray-200">
                 Learn more
               </Link>
             </div>
@@ -271,8 +272,8 @@ export function IconSidebar({
         {/* User Avatar */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-gray-100">
-              <Avatar className="h-7 w-7">
+            <button className="group flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-gray-100">
+              <Avatar className="h-7 w-7 transition-all duration-300 group-hover:scale-110 group-hover:rotate-[360deg]">
                 <AvatarImage src={userAvatar} alt={userName || userEmail} />
                 <AvatarFallback className="text-xs">
                   {getInitials(userName, userEmail)}

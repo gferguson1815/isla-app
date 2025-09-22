@@ -13,6 +13,7 @@ export interface Workspace extends BaseEntity {
   maxLinks: number;
   maxClicks: number;
   maxUsers: number;
+  logo_url?: string;
 }
 
 export interface WorkspaceMembership extends BaseEntity {

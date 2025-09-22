@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/aggregate-analytics",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/reset-usage",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-usage",
+      "schedule": "0 2 * * *"
     }
   ]
 }

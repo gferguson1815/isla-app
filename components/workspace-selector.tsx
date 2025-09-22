@@ -56,9 +56,32 @@ export function WorkspaceSelector() {
     )
   }
 
+  // Helper function to render workspace avatar
+  const renderWorkspaceAvatar = (workspace: typeof currentWorkspace) => {
+    if (!workspace) return null
+
+    if (workspace.logo_url) {
+      return (
+        <img
+          src={workspace.logo_url}
+          alt={workspace.name}
+          className="h-6 w-6 rounded-md object-cover"
+        />
+      )
+    }
+
+    // Default avatar with first letter
+    const firstLetter = workspace.name.charAt(0).toUpperCase()
+    return (
+      <div className="h-6 w-6 rounded-md bg-purple-600 flex items-center justify-center">
+        <span className="text-xs font-medium text-white">{firstLetter}</span>
+      </div>
+    )
+  }
+
   return (
     <div className="flex items-center gap-2">
-      <Building2 className="h-4 w-4 text-muted-foreground" />
+      {currentWorkspace && renderWorkspaceAvatar(currentWorkspace)}
       <Select
         value={currentWorkspace?.id}
         onValueChange={selectWorkspace}
@@ -69,13 +92,16 @@ export function WorkspaceSelector() {
         <SelectContent>
           {workspaces.map((workspace) => (
             <SelectItem key={workspace.id} value={workspace.id}>
-              <div className="flex flex-col">
-                <span>{workspace.name}</span>
-                {workspace.plan && (
-                  <span className="text-xs text-muted-foreground">
-                    {workspace.plan} plan
-                  </span>
-                )}
+              <div className="flex items-center gap-2">
+                {renderWorkspaceAvatar(workspace)}
+                <div className="flex flex-col">
+                  <span>{workspace.name}</span>
+                  {workspace.plan && (
+                    <span className="text-xs text-muted-foreground">
+                      {workspace.plan} plan
+                    </span>
+                  )}
+                </div>
               </div>
             </SelectItem>
           ))}

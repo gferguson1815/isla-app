@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { KeyboardShortcutButton } from "@/components/ui/keyboard-shortcut-button";
 import { Input } from "@/components/ui/input";
 import {
   ChevronDown,
@@ -68,12 +69,13 @@ export default function LinksPage() {
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button className="h-9 px-4 bg-black text-white hover:bg-gray-800 text-sm font-medium">
+          <KeyboardShortcutButton
+            className="h-9 px-4 bg-black text-white hover:bg-gray-800 text-sm font-medium"
+            shortcut="c"
+            onShortcut={() => console.log('Create link shortcut pressed')}
+          >
             Create link
-            <kbd className="ml-2 inline-flex h-5 items-center px-1.5 rounded bg-gray-800 text-[10px] font-medium text-gray-300">
-              C
-            </kbd>
-          </Button>
+          </KeyboardShortcutButton>
         </div>
       </div>
 
@@ -152,12 +154,13 @@ export default function LinksPage() {
                   referral programs, and more.
                 </p>
                 <div className="flex items-center justify-center gap-3">
-                  <Button className="h-9 px-4 bg-black text-white hover:bg-gray-800 text-sm font-medium">
+                  <KeyboardShortcutButton
+                    className="h-9 px-4 bg-black text-white hover:bg-gray-800 text-sm font-medium"
+                    shortcut="c"
+                    onShortcut={() => console.log('Create link shortcut pressed')}
+                  >
                     Create link
-                    <kbd className="ml-2 inline-flex h-4 items-center px-1 rounded bg-gray-700 text-[10px] font-medium text-gray-300">
-                      C
-                    </kbd>
-                  </Button>
+                  </KeyboardShortcutButton>
                   <Button
                     variant="outline"
                     className="h-9 px-4 text-sm text-gray-600 bg-white hover:bg-gray-50 border-gray-300"

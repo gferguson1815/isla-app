@@ -28,6 +28,7 @@ import {
   Palette,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { trpc } from "@/lib/trpc/client";
 
 interface NavigationPanelProps {
   activeSection: string;
@@ -37,6 +38,87 @@ export function NavigationPanel({ activeSection }: NavigationPanelProps) {
   const pathname = usePathname();
   const params = useParams();
   const workspace = params?.workspace as string;
+
+  // Fetch workspaces directly with TRPC to get the first/default workspace
+  const { data: workspaces } = trpc.workspace.list.useQuery();
+
+  // Get the current workspace (first one if not in a workspace-specific route)
+  const currentWorkspace = workspaces?.[0];
+
+  // Fetch usage metrics for the current workspace
+  const { data: metrics } = trpc.usage.getMetrics.useQuery(
+    { workspaceId: currentWorkspace?.id || '' },
+    {
+      enabled: !!currentWorkspace?.id,
+      refetchInterval: 30000, // Refresh every 30 seconds
+    }
+  );
+
+  // Calculate next reset date based on plan cycle
+  const getNextResetDate = () => {
+    // Get the first workspace (default) if we're not in a workspace-specific route
+    const currentWorkspace = workspaces?.[0];
+
+    // Return loading state if workspace data isn't ready
+    if (!currentWorkspace) {
+      return "loading...";
+    }
+
+    // Ensure we have a valid date to work with
+    if (!currentWorkspace.createdAt) {
+      console.warn('Workspace missing createdAt date, workspace:', currentWorkspace);
+      // Fallback to showing next month from today if createdAt is missing
+      const nextMonth = new Date();
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      return nextMonth.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    }
+
+    // IMPORTANT: Usage does NOT roll over between months - it resets completely
+    // - Free users: Usage resets monthly from workspace creation date
+    // - Paid users: Usage resets with billing cycle (subscription.current_period_end)
+    // - Upgrades: New limits apply immediately, usage resets on new billing cycle
+    // - Downgrades: New (lower) limits apply at next billing cycle
+
+    // TODO: Once subscription data is available in the workspace context,
+    // we'll use subscription.current_period_end for paid users.
+    // This will automatically handle upgrades/downgrades as Stripe manages
+    // the billing cycle dates when plans change.
+
+    // For free plan users (and temporarily for all users),
+    // calculate based on workspace creation date
+    const startDate = new Date(currentWorkspace.createdAt);
+    const now = new Date();
+
+    // Calculate months since the plan started
+    let monthsSincePlanStart = (now.getFullYear() - startDate.getFullYear()) * 12;
+    monthsSincePlanStart += now.getMonth() - startDate.getMonth();
+
+    // If we're past the day of the month when the plan started, we're in the next cycle
+    if (now.getDate() >= startDate.getDate()) {
+      monthsSincePlanStart++;
+    }
+
+    // Calculate the next reset date (next monthly anniversary)
+    const nextReset = new Date(startDate);
+    nextReset.setMonth(startDate.getMonth() + monthsSincePlanStart);
+
+    // Handle edge case where the day doesn't exist in the target month
+    // (e.g., Jan 31 -> Feb 28/29)
+    if (nextReset.getDate() !== startDate.getDate()) {
+      nextReset.setDate(0); // Set to last day of previous month
+    }
+
+    // Format the date
+    return nextReset.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
 
   // Helper to build workspace-scoped URLs
   const getWorkspaceUrl = (path: string) => {
@@ -202,12 +284,24 @@ export function NavigationPanel({ activeSection }: NavigationPanelProps) {
                   <MousePointerClick className="h-3.5 w-3.5" />
                   Events
                 </span>
-                <span className="text-gray-900">0 of 1K</span>
+                <span className="text-gray-900">
+                  {metrics?.clicks?.toLocaleString() || '0'} of {
+                    metrics?.clickLimit === -1
+                      ? '∞'
+                      : metrics?.clickLimit?.toLocaleString() || '1K'
+                  }
+                </span>
               </div>
               <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gray-400 rounded-full transition-all duration-300"
-                  style={{ width: `${(0 / 1000) * 100}%` }}
+                  style={{
+                    width: `${
+                      metrics?.clickLimit === -1
+                        ? 0
+                        : ((metrics?.clicks || 0) / (metrics?.clickLimit || 1000)) * 100
+                    }%`
+                  }}
                 />
               </div>
             </div>
@@ -217,27 +311,54 @@ export function NavigationPanel({ activeSection }: NavigationPanelProps) {
                   <LinkIcon className="h-3.5 w-3.5" />
                   Links
                 </span>
-                <span className="text-gray-900">0 of 25</span>
+                <span className="text-gray-900">
+                  {metrics?.links?.toLocaleString() || '0'} of {
+                    metrics?.linkLimit === -1
+                      ? '∞'
+                      : metrics?.linkLimit?.toLocaleString() || '25'
+                  }
+                </span>
               </div>
               <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gray-400 rounded-full transition-all duration-300"
-                  style={{ width: `${(0 / 25) * 100}%` }}
+                  style={{
+                    width: `${
+                      metrics?.linkLimit === -1
+                        ? 0
+                        : ((metrics?.links || 0) / (metrics?.linkLimit || 25)) * 100
+                    }%`
+                  }}
                 />
               </div>
             </div>
           </div>
           <div className="mt-3 text-xs text-gray-500">
-            Usage will reset Oct 17, 2025
+            Usage will reset {getNextResetDate()}
           </div>
 
-          {/* Upgrade Button */}
-          <Button
-            className="mt-4 w-full bg-black text-[13px] font-medium text-white hover:bg-gray-900"
-            size="sm"
-          >
-            Get Dub Pro
-          </Button>
+          {/* Upgrade Button - Dynamic based on current plan */}
+          {metrics?.plan && metrics.plan !== 'enterprise' && (
+            <Button
+              className="mt-4 w-full bg-black text-[13px] font-medium text-white hover:bg-gray-900"
+              size="sm"
+            >
+              {(() => {
+                switch (metrics.plan) {
+                  case 'free':
+                    return 'Upgrade to Pro';
+                  case 'pro':
+                    return 'Upgrade to Business';
+                  case 'business':
+                    return 'Upgrade to Advanced';
+                  case 'advanced':
+                    return 'Upgrade to Enterprise';
+                  default:
+                    return 'Upgrade Plan';
+                }
+              })()}
+            </Button>
+          )}
         </div>
       )}
     </div>

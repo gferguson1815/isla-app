@@ -1,7 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { redis, RedisKeys, UsageCounter } from '@/lib/redis'
 import { type PlanType, PLAN_LIMITS } from '../middleware/usage-limits'
-import cron from 'node-cron'
 
 export interface UsageMetrics {
   links: number
@@ -35,24 +34,20 @@ export async function getWorkspaceUsage(workspaceId: string): Promise<UsageMetri
       max_links: true,
       max_clicks: true,
       max_users: true,
-      custom_limits: true,
     }
   })
-  
+
   if (!workspace) {
     throw new Error('Workspace not found')
   }
-  
+
   // Get limits based on plan and overrides
   const planLimits = PLAN_LIMITS[workspace.plan as PlanType] || PLAN_LIMITS.free
-  const customLimits = workspace.custom_limits as any
-  
-  // Check for beta/VIP unlimited access
-  const isUnlimited = customLimits?.beta_user || customLimits?.vip_customer
-  
-  const linkLimit = isUnlimited ? -1 : (workspace.max_links ?? planLimits.maxLinks)
-  const clickLimit = isUnlimited ? -1 : (workspace.max_clicks ?? planLimits.maxClicks)
-  const userLimit = isUnlimited ? -1 : (workspace.max_users ?? planLimits.maxUsers)
+
+  // Use workspace max limits if set, otherwise use plan defaults
+  const linkLimit = workspace.max_links ?? planLimits.maxLinks
+  const clickLimit = workspace.max_clicks ?? planLimits.maxClicks
+  const userLimit = workspace.max_users ?? planLimits.maxUsers
   
   // Get current usage from Redis or database
   const [links, clicks, users] = await Promise.all([
@@ -92,27 +87,50 @@ async function getUsageCount(workspaceId: string, metric: 'links' | 'clicks' | '
       redisKey = RedisKeys.workspaceMembers(workspaceId)
       break
   }
-  
+
   const cachedValue = await UsageCounter.get(redisKey)
   if (cachedValue !== null) {
     return cachedValue
   }
-  
+
   // Fallback to database
   let count = 0
   switch (metric) {
     case 'links':
+      // Links are counted for the current billing period
+      const workspace = await prisma.workspaces.findUnique({
+        where: { id: workspaceId },
+        select: { created_at: true }
+      })
+
+      if (!workspace) {
+        return 0
+      }
+
+      const linkStartDate = calculateCurrentPeriodStart(workspace.created_at)
       count = await prisma.links.count({
-        where: { workspace_id: workspaceId }
+        where: {
+          workspace_id: workspaceId,
+          created_at: { gte: linkStartDate }
+        }
       })
       break
     case 'clicks':
-      const now = new Date()
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      // Clicks are counted for the current billing period based on workspace creation
+      const workspaceForClicks = await prisma.workspaces.findUnique({
+        where: { id: workspaceId },
+        select: { created_at: true }
+      })
+
+      if (!workspaceForClicks) {
+        return 0
+      }
+
+      const clickStartDate = calculateCurrentPeriodStart(workspaceForClicks.created_at)
       count = await prisma.click_events.count({
         where: {
           links: { workspace_id: workspaceId },
-          timestamp: { gte: startOfMonth }
+          timestamp: { gte: clickStartDate }
         }
       })
       break
@@ -122,14 +140,70 @@ async function getUsageCount(workspaceId: string, metric: 'links' | 'clicks' | '
       })
       break
   }
-  
+
   // Update Redis cache
   await UsageCounter.set(redisKey, count)
-  if (metric === 'clicks') {
-    await UsageCounter.setMonthlyExpiry(redisKey)
+  if (metric === 'clicks' || metric === 'links') {
+    // Set expiry to the end of the current billing period
+    const workspace = await prisma.workspaces.findUnique({
+      where: { id: workspaceId },
+      select: { created_at: true }
+    })
+    if (workspace) {
+      const nextReset = calculateNextPeriodStart(workspace.created_at)
+      const ttlSeconds = Math.floor((nextReset.getTime() - Date.now()) / 1000)
+      if (ttlSeconds > 0 && redis) {
+        await redis.expire(redisKey, ttlSeconds)
+      }
+    }
   }
-  
+
   return count
+}
+
+/**
+ * Calculate the start of the current billing period based on workspace creation date
+ */
+function calculateCurrentPeriodStart(createdAt: Date): Date {
+  const now = new Date()
+  const startDate = new Date(createdAt)
+
+  // Calculate months since creation
+  let monthsSinceCreation = (now.getFullYear() - startDate.getFullYear()) * 12
+  monthsSinceCreation += now.getMonth() - startDate.getMonth()
+
+  // If we haven't reached the day of the month yet, we're still in the previous period
+  if (now.getDate() < startDate.getDate()) {
+    monthsSinceCreation--
+  }
+
+  // Calculate the start of the current period
+  const periodStart = new Date(startDate)
+  periodStart.setMonth(startDate.getMonth() + monthsSinceCreation)
+
+  // Handle edge cases where the day doesn't exist in the target month
+  if (periodStart.getDate() !== startDate.getDate()) {
+    periodStart.setDate(0) // Set to last day of previous month
+  }
+
+  return periodStart
+}
+
+/**
+ * Calculate the start of the next billing period based on workspace creation date
+ */
+function calculateNextPeriodStart(createdAt: Date): Date {
+  const currentPeriodStart = calculateCurrentPeriodStart(createdAt)
+  const nextPeriod = new Date(currentPeriodStart)
+  nextPeriod.setMonth(nextPeriod.getMonth() + 1)
+
+  // Handle edge cases for month boundaries
+  const originalDate = new Date(createdAt).getDate()
+  if (nextPeriod.getDate() !== originalDate) {
+    nextPeriod.setDate(0) // Set to last day of previous month
+  }
+
+  return nextPeriod
 }
 
 /**
@@ -294,56 +368,60 @@ export async function syncUsageToDatabase(workspaceId: string): Promise<void> {
 }
 
 /**
- * Reset monthly click counters
+ * Reset counters for workspaces that have reached their billing period reset date
  */
-export async function resetMonthlyCounters(): Promise<void> {
-  console.log('Starting monthly counter reset...')
-  
-  // Get all workspaces
-  const workspaces = await prisma.workspaces.findMany({
-    select: { id: true }
-  })
-  
-  // Reset click counters for each workspace
-  for (const workspace of workspaces) {
-    const clickKey = RedisKeys.workspaceClicks(workspace.id)
-    await UsageCounter.set(clickKey, 0)
-    await UsageCounter.setMonthlyExpiry(clickKey)
-  }
-  
-  console.log(`Reset monthly counters for ${workspaces.length} workspaces`)
-}
+export async function resetWorkspaceCounters(): Promise<void> {
+  console.log('Checking for workspace counter resets...')
 
-/**
- * Initialize cron job for daily sync
- */
-export function initializeUsageSyncJob(): void {
-  // Run daily sync at 2 AM
-  cron.schedule('0 2 * * *', async () => {
-    console.log('Running daily usage sync...')
-    
-    try {
-      const workspaces = await prisma.workspaces.findMany({
-        select: { id: true }
-      })
-      
-      for (const workspace of workspaces) {
-        await syncUsageToDatabase(workspace.id)
-      }
-      
-      console.log(`Synced usage for ${workspaces.length} workspaces`)
-    } catch (error) {
-      console.error('Daily usage sync failed:', error)
+  const now = new Date()
+  const workspaces = await prisma.workspaces.findMany({
+    select: {
+      id: true,
+      created_at: true
     }
   })
-  
-  // Reset monthly counters on the 1st of each month at 12:01 AM
-  cron.schedule('1 0 1 * *', async () => {
-    await resetMonthlyCounters()
-  })
-  
-  console.log('Usage sync cron jobs initialized')
+
+  let resetCount = 0
+  for (const workspace of workspaces) {
+    const currentPeriodStart = calculateCurrentPeriodStart(workspace.created_at)
+    const lastResetKey = `${RedisKeys.workspaceClicks(workspace.id)}:last_reset`
+
+    // Check if we've already reset for this period
+    const lastResetStr = redis ? await redis.get(lastResetKey) : null
+    const lastReset = lastResetStr ? new Date(lastResetStr) : null
+
+    // If we haven't reset yet for this period, do it now
+    if (!lastReset || lastReset < currentPeriodStart) {
+      // Reset click and link counters for this workspace
+      const clickKey = RedisKeys.workspaceClicks(workspace.id)
+      const linkKey = RedisKeys.workspaceLinks(workspace.id)
+
+      await UsageCounter.set(clickKey, 0)
+      await UsageCounter.set(linkKey, 0)
+
+      // Set expiry to next reset date
+      const nextReset = calculateNextPeriodStart(workspace.created_at)
+      const ttlSeconds = Math.floor((nextReset.getTime() - now.getTime()) / 1000)
+      if (ttlSeconds > 0 && redis) {
+        await redis.expire(clickKey, ttlSeconds)
+        await redis.expire(linkKey, ttlSeconds)
+      }
+
+      // Mark this workspace as reset for this period
+      if (redis) {
+        await redis.set(lastResetKey, currentPeriodStart.toISOString())
+        await redis.expire(lastResetKey, 60 * 60 * 24 * 35) // Keep for 35 days
+      }
+
+      resetCount++
+    }
+  }
+
+  if (resetCount > 0) {
+    console.log(`Reset counters for ${resetCount} workspaces`)
+  }
 }
+
 
 /**
  * Recalculate usage from database (recovery function)

@@ -9,10 +9,12 @@ import { KeyboardShortcutsDialog } from "@/components/help/KeyboardShortcutsDial
 import { QuickCreateDialog } from "@/components/links/QuickCreateDialog";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useAuth } from "@/contexts/auth-context";
+import { useWorkspace } from "@/contexts/workspace-context";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   useGlobalKeyboardShortcuts();
   const { user } = useAuth();
+  const { currentWorkspace } = useWorkspace();
   const pathname = usePathname();
   const [activeSection, setActiveSection] = useState("");
 
@@ -30,7 +32,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex h-screen" style={{ backgroundColor: '#e5e5e5' }}>
         {/* Icon Sidebar - 64px */}
         <IconSidebar
-          workspaceName="Isla"
+          workspaceLogo={currentWorkspace?.logo_url || undefined}
+          workspaceName={currentWorkspace?.name || "Isla"}
           userEmail={user?.email || ""}
           userName={user?.user_metadata?.full_name}
           userAvatar={user?.user_metadata?.avatar_url}

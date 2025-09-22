@@ -98,6 +98,7 @@ export const workspaceRouter = router({
         id: workspace.id,
         name: workspace.name,
         slug: workspace.slug,
+        logo_url: workspace.logo_url,
         domain: workspace.domain,
         plan: workspace.plan as WorkspacePlan,
         stripeCustomerId: workspace.stripe_customer_id,
@@ -139,9 +140,12 @@ export const workspaceRouter = router({
         id: membership.workspaces.id,
         name: membership.workspaces.name,
         slug: membership.workspaces.slug,
+        logo_url: membership.workspaces.logo_url,
         domain: membership.workspaces.domain,
         plan: membership.workspaces.plan as WorkspacePlan,
         stripeCustomerId: membership.workspaces.stripe_customer_id,
+        createdAt: membership.workspaces.created_at,
+        updatedAt: membership.workspaces.updated_at,
         stripeSubscriptionId: membership.workspaces.stripe_subscription_id,
         maxLinks: membership.workspaces.max_links,
         maxClicks: membership.workspaces.max_clicks,
@@ -149,8 +153,6 @@ export const workspaceRouter = router({
         onboarding_completed: membership.workspaces.onboarding_completed,
         onboarding_steps: membership.workspaces.onboarding_steps,
         getting_started_dismissed: membership.workspaces.getting_started_dismissed,
-        createdAt: membership.workspaces.created_at,
-        updatedAt: membership.workspaces.updated_at,
         membership: {
           id: membership.id,
           userId: membership.user_id,
@@ -242,6 +244,7 @@ export const workspaceRouter = router({
       workspaceId: z.string().uuid(),
       name: z.string().min(1).max(100).optional(),
       domain: z.string().optional(),
+      logo_url: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const { workspaceId, ...updateData } = input;
@@ -274,6 +277,7 @@ export const workspaceRouter = router({
         id: workspace.id,
         name: workspace.name,
         slug: workspace.slug,
+        logo_url: workspace.logo_url,
         domain: workspace.domain,
         plan: workspace.plan as WorkspacePlan,
         stripeCustomerId: workspace.stripe_customer_id,
@@ -283,6 +287,43 @@ export const workspaceRouter = router({
         maxUsers: workspace.max_users,
         createdAt: workspace.created_at,
         updatedAt: workspace.updated_at,
+      };
+    }),
+
+  // Update workspace logo
+  updateLogo: protectedProcedure
+    .input(z.object({
+      workspaceId: z.string().uuid(),
+      logoUrl: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Check if user has admin/owner permissions
+      const membership = await ctx.prisma.workspace_memberships.findFirst({
+        where: {
+          user_id: ctx.userId,
+          workspace_id: input.workspaceId,
+          role: { in: ['owner', 'admin'] },
+        },
+      });
+
+      if (!membership) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Insufficient permissions to update workspace logo',
+        });
+      }
+
+      const workspace = await ctx.prisma.workspaces.update({
+        where: { id: input.workspaceId },
+        data: {
+          logo_url: input.logoUrl,
+          updated_at: new Date(),
+        },
+      });
+
+      return {
+        success: true,
+        logo_url: workspace.logo_url,
       };
     }),
 

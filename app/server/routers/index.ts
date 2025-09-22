@@ -9,6 +9,7 @@ import { tagRouter } from "./tag";
 import { billingRouter } from "./billing";
 import { domainRouter } from "./domain";
 import { onboardingRouter } from "./onboarding";
+import { usageRouter } from "./usage";
 
 export const appRouter = router({
   link: linkRouter,
@@ -21,6 +22,7 @@ export const appRouter = router({
   billing: billingRouter,
   domain: domainRouter,
   onboarding: onboardingRouter,
+  usage: usageRouter,
 });
 
 export type AppRouter = typeof appRouter;

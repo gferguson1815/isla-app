@@ -6,30 +6,30 @@ import { prisma } from '@/lib/prisma'
 // Plan limits configuration
 export const PLAN_LIMITS = {
   free: {
-    maxLinks: 50,
-    maxClicks: 5000,
+    maxLinks: 25,
+    maxClicks: 1000,
     maxUsers: 1,
     customDomains: false,
   },
-  starter: {
-    maxLinks: 500,
+  pro: {
+    maxLinks: 1000,
     maxClicks: 50000,
     maxUsers: 3,
-    customDomains: false,
+    customDomains: true,
   },
-  pro: {
+  business: {
     maxLinks: 5000,
     maxClicks: 500000,
     maxUsers: 10,
     customDomains: true,
   },
   advanced: {
-    maxLinks: 50000,
-    maxClicks: 1000000,
+    maxLinks: 10000,
+    maxClicks: 2000000,
     maxUsers: 20,
     customDomains: true,
   },
-  business: {
+  enterprise: {
     maxLinks: -1, // unlimited
     maxClicks: -1, // unlimited
     maxUsers: -1, // unlimited
@@ -65,7 +65,7 @@ interface CustomLimits {
  * Get the next tier plan suggestion
  */
 function getNextTier(currentPlan: PlanType): PlanType | null {
-  const tiers: PlanType[] = ['free', 'starter', 'pro', 'business']
+  const tiers: PlanType[] = ['free', 'pro', 'business', 'advanced', 'enterprise']
   const currentIndex = tiers.indexOf(currentPlan)
   if (currentIndex === -1 || currentIndex === tiers.length - 1) {
     return null
