@@ -85,20 +85,20 @@ export function LinkRow({ link, onEdit, onDelete }: LinkRowProps) {
           <img
             src={link.favicon}
             alt=""
-            className="w-8 h-8 rounded flex-shrink-0"
+            className="w-8 h-8 rounded-full flex-shrink-0"
             onError={(e) => {
               // Fallback to colored circle if avatar fails to load
               const parent = e.currentTarget.parentElement;
               if (parent) {
                 e.currentTarget.style.display = 'none';
                 const fallback = document.createElement('div');
-                fallback.className = 'w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded flex-shrink-0';
+                fallback.className = 'w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex-shrink-0';
                 parent.insertBefore(fallback, e.currentTarget);
               }
             }}
           />
         ) : (
-          <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded flex-shrink-0" />
+          <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex-shrink-0" />
         )}
 
         {/* Link details */}

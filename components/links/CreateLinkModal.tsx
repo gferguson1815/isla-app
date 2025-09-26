@@ -666,11 +666,11 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
                     <img
                       src={linkAvatar}
                       alt=""
-                      className="h-4 w-4 rounded"
+                      className="h-4 w-4 rounded-full"
                       onError={(e) => {
                         e.currentTarget.style.display = 'none';
                         const globe = document.createElement('div');
-                        globe.className = 'h-4 w-4 rounded bg-gradient-to-br from-purple-500 to-pink-500';
+                        globe.className = 'h-4 w-4 rounded-full bg-gradient-to-br from-purple-500 to-pink-500';
                         e.currentTarget.parentElement?.insertBefore(globe, e.currentTarget);
                       }}
                     />
