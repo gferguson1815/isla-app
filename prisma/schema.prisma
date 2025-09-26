@@ -209,6 +209,8 @@ model links {
   android_url             String?
   enable_geolocation      Boolean                @default(false)
   enable_device_targeting Boolean                @default(false)
+  geo_targeting           Json?
+  device_targeting        Json?
   link_cloaking           Boolean                @default(false)
   seo_indexing            Boolean                @default(true)
   external_id             String?

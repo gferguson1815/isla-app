@@ -96,6 +96,7 @@ const generateShortLinkCode = () => {
 
 export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }: CreateLinkModalProps) {
   const router = useRouter();
+  const utils = api.useContext();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [draftToDelete, setDraftToDelete] = useState<string | null>(null);
   const [folderDropdownOpen, setFolderDropdownOpen] = useState(false);
@@ -240,6 +241,9 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
         foregroundColor: '#000000',
         logo: '/images/logos/isla-icon-black.svg',
       });
+      // Invalidate related queries to refresh the data
+      utils.usage.getMetrics.invalidate({ workspaceId });
+      utils.link.list.invalidate({ workspaceId });
       // Close modal and refresh
       onClose();
       router.refresh();
@@ -1681,6 +1685,7 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
                         title: title || undefined,
                         description: description || undefined,
                         image: image || undefined,
+                        folder_id: folderId || null,
                         tags: tags.length > 0 ? tags : undefined,
                         qrCodeSettings: {
                           backgroundColor: qrOptions.backgroundColor,

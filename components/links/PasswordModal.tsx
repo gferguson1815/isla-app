@@ -51,10 +51,8 @@ export function PasswordModal({
   const workspaceSlug = params.workspace as string;
 
   // Check if password protection is enabled
-  const passwordFeature = useFeatureGate({
-    workspaceId,
-    feature: 'password_protection'
-  });
+  const { checkFeature } = useFeatureGate(workspaceId);
+  const passwordFeature = checkFeature('password_protection');
 
   // Handle click outside to close upgrade dropdown
   useEffect(() => {

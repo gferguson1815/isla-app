@@ -9,6 +9,7 @@ import {
   requireLinkOwnership,
   type ServerPermissionContext
 } from '@/lib/permissions/backend';
+import { RedisKeys, UsageCounter } from '@/lib/redis';
 
 const createLinkSchema = z.object({
   workspaceId: z.string().uuid(),
@@ -17,6 +18,7 @@ const createLinkSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),
   image: z.string().url().optional(),
+  folder_id: z.string().uuid().nullable().optional(),
   tags: z.array(z.string()).max(10).optional(),
   qrCodeSettings: z.object({
     backgroundColor: z.string().optional(),
@@ -197,6 +199,7 @@ export const linkRouter = router({
             title: input.title || null,
             description: input.description || null,
             image: input.image || null,
+            folder_id: input.folder_id || null,
             tags: processedTags,
             qr_code_settings: input.qrCodeSettings || null,
             ios_url: input.iosUrl || null,
@@ -215,6 +218,15 @@ export const linkRouter = router({
             updated_at: new Date(),
           },
         });
+
+        // Increment Redis counter for usage tracking
+        try {
+          const linkKey = RedisKeys.workspaceLinks(workspaceId);
+          await UsageCounter.increment(linkKey, 1);
+        } catch (error) {
+          console.error('Failed to update link counter in Redis:', error);
+          // Don't throw - counter update shouldn't block link creation
+        }
 
         const responseTime = Date.now() - startTime;
         if (responseTime > appConfig.api.performanceThreshold) {
@@ -249,7 +261,7 @@ export const linkRouter = router({
       await requirePermission(serverCtx, input.workspaceId, Permission.LINKS_VIEW);
 
       // Build where clause
-      const where: any = {
+      const where: Record<string, unknown> = {
         workspace_id: input.workspaceId,
       };
 

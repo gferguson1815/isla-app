@@ -53,10 +53,8 @@ export function LinkExpirationModal({
   const workspaceSlug = params.workspace as string;
 
   // Check if link expiration is enabled
-  const expirationFeature = useFeatureGate({
-    workspaceId,
-    feature: 'link_expiration'
-  });
+  const { checkFeature } = useFeatureGate(workspaceId);
+  const expirationFeature = checkFeature('link_expiration');
 
   // Handle click outside to close upgrade dropdown
   useEffect(() => {

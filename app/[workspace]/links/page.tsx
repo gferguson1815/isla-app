@@ -10,9 +10,7 @@ import {
   ChevronDown,
   ChevronsUpDown,
   Search,
-  Filter,
   LayoutGrid,
-  Plus,
   MoreVertical,
   Folder,
   Link,
@@ -21,24 +19,63 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { OnboardingCompleteModal } from "./components/OnboardingCompleteModal";
 import { LinksFooter } from "@/components/links/LinksFooter";
 import { CreateLinkModal } from "@/components/links/CreateLinkModal";
+import { LinkRow } from "@/components/links/LinkRow";
+import { DeleteLinkDialog } from "@/components/links/DeleteLinkDialog";
 
 export default function LinksPage() {
   const params = useParams();
   const workspaceSlug = params.workspace as string;
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedLink, setSelectedLink] = useState<{ id: string; slug: string; url: string; title?: string | null; shortUrl?: string } | null>(null);
 
   // Fetch workspace by slug to get the actual UUID
   const { data: workspace } = api.workspace.getBySlug.useQuery(
     { slug: workspaceSlug },
     { enabled: !!workspaceSlug }
   );
+
+  // Fetch links for the workspace
+  const { data: linksData, isLoading: linksLoading, refetch: refetchLinks } = api.link.list.useQuery(
+    {
+      workspaceId: workspace?.id || '',
+      limit: 50,
+      offset: 0,
+      search: searchQuery || undefined,
+    },
+    { enabled: !!workspace?.id }
+  );
+
+  const deleteLinkMutation = api.link.delete.useMutation({
+    onSuccess: () => {
+      refetchLinks();
+      setDeleteDialogOpen(false);
+      setSelectedLink(null);
+    },
+  });
+
+  const handleDeleteLink = (linkId: string) => {
+    const link = linksData?.links.find(l => l.id === linkId);
+    if (link) {
+      setSelectedLink(link);
+      setDeleteDialogOpen(true);
+    }
+  };
+
+  const handleConfirmDelete = async (linkId: string) => {
+    if (workspace) {
+      await deleteLinkMutation.mutateAsync({
+        id: linkId,
+        workspaceId: workspace.id,
+      });
+    }
+  };
 
   // Handle keyboard shortcut for creating link (Cmd/Ctrl + C)
   useEffect(() => {
@@ -151,98 +188,117 @@ export default function LinksPage() {
         {/* Content wrapper with flex-1 to push footer to bottom */}
         <div className="flex-1 flex flex-col">
           {/* Content Area with Border */}
-          <div className="border border-gray-200 rounded-lg bg-white" style={{ height: '400px', marginLeft: '109.5px', marginRight: '109.5px' }}>
-            <div className="flex flex-col items-center justify-center h-full">
-              {/* Animated Placeholder Links Container */}
-              <div className="mb-6 h-28 relative overflow-hidden" style={{ width: '280px' }}>
-                {/* Scrolling animation container - doubled for seamless loop */}
-                <div className="flex flex-col gap-3 animate-scroll-vertical">
-                  {/* First set */}
-                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <Link className="h-4 w-4 text-gray-400" />
-                      <div className="h-2 w-24 bg-gray-200 rounded"></div>
-                    </div>
-                    <MousePointerClick className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <Link className="h-4 w-4 text-gray-400" />
-                      <div className="h-2 w-20 bg-gray-200 rounded"></div>
-                    </div>
-                    <MousePointerClick className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <Link className="h-4 w-4 text-gray-400" />
-                      <div className="h-2 w-28 bg-gray-200 rounded"></div>
-                    </div>
-                    <MousePointerClick className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <Link className="h-4 w-4 text-gray-400" />
-                      <div className="h-2 w-16 bg-gray-200 rounded"></div>
-                    </div>
-                    <MousePointerClick className="h-4 w-4 text-gray-400" />
-                  </div>
-                  {/* Duplicate set for seamless loop */}
-                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <Link className="h-4 w-4 text-gray-400" />
-                      <div className="h-2 w-24 bg-gray-200 rounded"></div>
-                    </div>
-                    <MousePointerClick className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <Link className="h-4 w-4 text-gray-400" />
-                      <div className="h-2 w-20 bg-gray-200 rounded"></div>
-                    </div>
-                    <MousePointerClick className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <Link className="h-4 w-4 text-gray-400" />
-                      <div className="h-2 w-28 bg-gray-200 rounded"></div>
-                    </div>
-                    <MousePointerClick className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <Link className="h-4 w-4 text-gray-400" />
-                      <div className="h-2 w-16 bg-gray-200 rounded"></div>
-                    </div>
-                    <MousePointerClick className="h-4 w-4 text-gray-400" />
-                  </div>
+          <div className="border border-gray-200 rounded-lg bg-white flex-1" style={{ marginLeft: '109.5px', marginRight: '109.5px', minHeight: '400px' }}>
+            {linksLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-gray-500">Loading links...</div>
+              </div>
+            ) : linksData?.links && linksData.links.length > 0 ? (
+              <div className="flex flex-col h-full">
+                {/* Links list */}
+                <div className="flex-1 overflow-auto">
+                  {linksData.links.map((link) => (
+                    <LinkRow
+                      key={link.id}
+                      link={link}
+                      onDelete={handleDeleteLink}
+                    />
+                  ))}
                 </div>
               </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full">
+                {/* Animated Placeholder Links Container */}
+                <div className="mb-6 h-28 relative overflow-hidden" style={{ width: '280px' }}>
+                  {/* Scrolling animation container - doubled for seamless loop */}
+                  <div className="flex flex-col gap-3 animate-scroll-vertical">
+                    {/* First set */}
+                    <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <Link className="h-4 w-4 text-gray-400" />
+                        <div className="h-2 w-24 bg-gray-200 rounded"></div>
+                      </div>
+                      <MousePointerClick className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <Link className="h-4 w-4 text-gray-400" />
+                        <div className="h-2 w-20 bg-gray-200 rounded"></div>
+                      </div>
+                      <MousePointerClick className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <Link className="h-4 w-4 text-gray-400" />
+                        <div className="h-2 w-28 bg-gray-200 rounded"></div>
+                      </div>
+                      <MousePointerClick className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <Link className="h-4 w-4 text-gray-400" />
+                        <div className="h-2 w-16 bg-gray-200 rounded"></div>
+                      </div>
+                      <MousePointerClick className="h-4 w-4 text-gray-400" />
+                    </div>
+                    {/* Duplicate set for seamless loop */}
+                    <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <Link className="h-4 w-4 text-gray-400" />
+                        <div className="h-2 w-24 bg-gray-200 rounded"></div>
+                      </div>
+                      <MousePointerClick className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <Link className="h-4 w-4 text-gray-400" />
+                        <div className="h-2 w-20 bg-gray-200 rounded"></div>
+                      </div>
+                      <MousePointerClick className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <Link className="h-4 w-4 text-gray-400" />
+                        <div className="h-2 w-28 bg-gray-200 rounded"></div>
+                      </div>
+                      <MousePointerClick className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <Link className="h-4 w-4 text-gray-400" />
+                        <div className="h-2 w-16 bg-gray-200 rounded"></div>
+                      </div>
+                      <MousePointerClick className="h-4 w-4 text-gray-400" />
+                    </div>
+                  </div>
+                </div>
 
-              {/* Empty State Text and Buttons */}
-              <div className="text-center max-w-md">
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">No links yet</h2>
-                <p className="text-gray-500 mb-7 text-sm leading-relaxed">
-                  Start creating short links for your marketing campaigns,<br />
-                  referral programs, and more.
-                </p>
-                <div className="flex items-center justify-center gap-3">
-                  <KeyboardShortcutButton
-                    className="h-10 px-5 bg-black text-white hover:bg-gray-800 text-sm font-medium rounded-md"
-                    shortcut="c"
-                    onShortcut={() => setIsCreateModalOpen(true)}
-                    onClick={() => setIsCreateModalOpen(true)}
-                  >
-                    Create link
-                  </KeyboardShortcutButton>
-                  <Button
-                    variant="outline"
-                    className="h-10 px-5 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-md"
-                  >
-                    Learn more
-                  </Button>
+                {/* Empty State Text and Buttons */}
+                <div className="text-center max-w-md">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-2">No links yet</h2>
+                  <p className="text-gray-500 mb-7 text-sm leading-relaxed">
+                    Start creating short links for your marketing campaigns,<br />
+                    referral programs, and more.
+                  </p>
+                  <div className="flex items-center justify-center gap-3">
+                    <KeyboardShortcutButton
+                      className="h-10 px-5 bg-black text-white hover:bg-gray-800 text-sm font-medium rounded-md"
+                      shortcut="c"
+                      onShortcut={() => setIsCreateModalOpen(true)}
+                      onClick={() => setIsCreateModalOpen(true)}
+                    >
+                      Create link
+                    </KeyboardShortcutButton>
+                    <Button
+                      variant="outline"
+                      className="h-10 px-5 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-md"
+                    >
+                      Learn more
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Spacer to push footer down */}
@@ -251,7 +307,7 @@ export default function LinksPage() {
 
         {/* Footer - now sticks to bottom */}
         <LinksFooter
-          totalLinks={0}
+          totalLinks={linksData?.total || 0}
           currentPage={1}
           hasNextPage={false}
           hasPreviousPage={false}
@@ -265,9 +321,23 @@ export default function LinksPage() {
       {workspace && (
         <CreateLinkModal
           isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
+          onClose={() => {
+            setIsCreateModalOpen(false);
+            refetchLinks();
+          }}
           workspaceId={workspace.id}
           workspaceSlug={workspaceSlug}
+        />
+      )}
+
+      {/* Delete Link Dialog */}
+      {selectedLink && (
+        <DeleteLinkDialog
+          link={selectedLink}
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          onDelete={handleConfirmDelete}
+          isDeleting={deleteLinkMutation.isLoading}
         />
       )}
     </>

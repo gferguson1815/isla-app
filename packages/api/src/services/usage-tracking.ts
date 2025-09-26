@@ -89,7 +89,42 @@ async function getUsageCount(workspaceId: string, metric: 'links' | 'clicks' | '
   }
 
   const cachedValue = await UsageCounter.get(redisKey)
-  if (cachedValue !== null) {
+  if (cachedValue !== null && cachedValue !== undefined) {
+    // For links and clicks, if Redis returns 0, double-check with database
+    // This handles the case where Redis was initialized but not synced
+    if ((metric === 'links' || metric === 'clicks') && cachedValue === 0) {
+      const workspace = await prisma.workspaces.findUnique({
+        where: { id: workspaceId },
+        select: { created_at: true }
+      })
+
+      if (workspace) {
+        const periodStartDate = calculateCurrentPeriodStart(workspace.created_at)
+
+        let actualCount = 0
+        if (metric === 'links') {
+          actualCount = await prisma.links.count({
+            where: {
+              workspace_id: workspaceId,
+              created_at: { gte: periodStartDate }
+            }
+          })
+        } else if (metric === 'clicks') {
+          actualCount = await prisma.click_events.count({
+            where: {
+              links: { workspace_id: workspaceId },
+              timestamp: { gte: periodStartDate }
+            }
+          })
+        }
+
+        if (actualCount > 0) {
+          // Redis is out of sync, update it
+          await UsageCounter.set(redisKey, actualCount)
+          return actualCount
+        }
+      }
+    }
     return cachedValue
   }
 
