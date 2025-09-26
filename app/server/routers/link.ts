@@ -3,6 +3,7 @@ import { router, protectedProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
 import { generateUniqueSlug, isValidSlug, sanitizeSlug } from '@/lib/utils/slug';
 import { appConfig, getShortUrl } from '@/lib/config/app';
+import { generateLinkAvatar } from '@/lib/utils/avatar';
 import {
   Permission,
   requirePermission,
@@ -188,10 +189,14 @@ export const linkRouter = router({
           }
         }
 
+        // Generate unique avatar for the link
+        const linkId = crypto.randomUUID();
+        const avatarUrl = generateLinkAvatar(linkId);
+
         // Create link in database
         const link = await ctx.prisma.links.create({
           data: {
-            id: crypto.randomUUID(),
+            id: linkId,
             workspace_id: workspaceId,
             created_by: ctx.userId,
             url: input.url,
@@ -199,6 +204,7 @@ export const linkRouter = router({
             title: input.title || null,
             description: input.description || null,
             image: input.image || null,
+            favicon: avatarUrl, // Store the generated avatar
             folder_id: input.folder_id || null,
             tags: processedTags,
             qr_code_settings: input.qrCodeSettings || null,
@@ -998,14 +1004,19 @@ export const linkRouter = router({
                 }
               }
 
+              // Generate unique avatar for imported link
+              const importLinkId = crypto.randomUUID();
+              const importAvatarUrl = generateLinkAvatar(importLinkId);
+
               // Create the link
               const newLink = await tx.links.create({
                 data: {
-                  id: crypto.randomUUID(),
+                  id: importLinkId,
                   workspace_id: input.workspaceId,
                   url: linkData.url,
                   slug: finalSlug,
                   title: linkData.title || null,
+                  favicon: importAvatarUrl, // Add avatar for imported links
                   folder_id: folderId,
                   tags: linkData.tags || [],
                   import_id: input.importId,
