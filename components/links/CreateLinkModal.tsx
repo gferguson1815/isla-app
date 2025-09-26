@@ -5,6 +5,7 @@ import { useAutoSaveDraft } from "@/hooks/useAutoSaveDraft";
 import { api } from "@/utils/api";
 import { useRouter } from "next/navigation";
 import NextLink from "next/link";
+import { generateLinkAvatar } from "@/lib/utils/avatar";
 import {
   X,
   Link,
@@ -163,6 +164,8 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
 
   const [showDrafts, setShowDrafts] = useState(false);
   const [currentDraftId, setCurrentDraftId] = useState<string | undefined>();
+  const [linkId, setLinkId] = useState<string>("");
+  const [linkAvatar, setLinkAvatar] = useState<string>("");
 
   // Track initial values to detect user changes
   const [initialValues, setInitialValues] = useState<any>({});
@@ -326,6 +329,8 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
     deviceTargeting,
     qrCodeSettings: qrOptions,
     conversionTracking,
+    linkId,
+    linkAvatar,
   };
 
   // Use autosave hook with localStorage only for now
@@ -419,6 +424,11 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
       conversionTracking: {},
     };
 
+    // Generate a unique link ID and avatar for this session
+    const newLinkId = crypto.randomUUID();
+    setLinkId(newLinkId);
+    setLinkAvatar(generateLinkAvatar(newLinkId));
+
     // Set all states to match initial values
     setDestinationUrl("");
     setShortLink(newShortLink);
@@ -503,6 +513,17 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
           logo: '/images/logos/isla-icon-black.svg',
         });
         setConversionTracking(draft.conversionTracking || {});
+
+        // Restore or generate link ID and avatar
+        if (draft.linkId && draft.linkAvatar) {
+          setLinkId(draft.linkId);
+          setLinkAvatar(draft.linkAvatar);
+        } else {
+          // Generate new ones if not in draft
+          const newLinkId = crypto.randomUUID();
+          setLinkId(newLinkId);
+          setLinkAvatar(generateLinkAvatar(newLinkId));
+        }
 
         setShowDrafts(false);
       }
@@ -640,7 +661,22 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
                 <span>Links</span>
                 <span className="text-gray-500">›</span>
                 <div className="flex items-center gap-1.5">
-                  <Globe className="h-4 w-4 text-gray-600" />
+                  {linkAvatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={linkAvatar}
+                      alt=""
+                      className="h-4 w-4 rounded"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const globe = document.createElement('div');
+                        globe.className = 'h-4 w-4 rounded bg-gradient-to-br from-purple-500 to-pink-500';
+                        e.currentTarget.parentElement?.insertBefore(globe, e.currentTarget);
+                      }}
+                    />
+                  ) : (
+                    <Globe className="h-4 w-4 text-gray-600" />
+                  )}
                   <span>New link</span>
                 </div>
               </div>
