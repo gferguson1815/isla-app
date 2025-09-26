@@ -17,16 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { DeleteLinkDialog } from '@/components/links/DeleteLinkDialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Copy, Edit, ExternalLink, MoreVertical, Trash2 } from 'lucide-react';
@@ -72,12 +63,9 @@ export function LinksTable({ links, onDelete, isDeleting = false }: LinksTablePr
     setDeleteDialogOpen(true);
   };
 
-  const handleConfirmDelete = async () => {
-    if (selectedLink) {
-      await onDelete(selectedLink.id);
-      setDeleteDialogOpen(false);
-      setSelectedLink(null);
-    }
+  const handleConfirmDelete = async (id: string) => {
+    await onDelete(id);
+    setSelectedLink(null);
   };
 
   const truncateUrl = (url: string, maxLength = 50) => {
@@ -199,26 +187,15 @@ export function LinksTable({ links, onDelete, isDeleting = false }: LinksTablePr
         </Table>
       </div>
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the link &quot;/{selectedLink?.slug}&quot;. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmDelete}
-              className="bg-red-600 hover:bg-red-700"
-              disabled={isDeleting}
-            >
-              {isDeleting ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {selectedLink && (
+        <DeleteLinkDialog
+          link={selectedLink}
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          onDelete={handleConfirmDelete}
+          isDeleting={isDeleting}
+        />
+      )}
     </>
   );
 }

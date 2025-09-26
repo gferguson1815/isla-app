@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { Loader2, Mail, Info } from 'lucide-react'
+import { Loader2, Mail } from 'lucide-react'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 import Link from 'next/link'
 
 export default function LoginPage() {
@@ -104,8 +105,11 @@ export default function LoginPage() {
           {rateLimitInfo && rateLimitInfo.remaining !== undefined && (
             <div className="space-y-2 p-3 bg-muted rounded-lg">
               <div className="flex items-center gap-2 text-sm">
-                <Info className="h-4 w-4" />
                 <span className="font-medium">Rate Limit Status</span>
+                <InfoTooltip
+                  content="We limit login attempts to prevent abuse. Remaining attempts will reset after the time shown below."
+                  className="inline-block"
+                />
               </div>
               <div className="space-y-1">
                 <div className="flex justify-between text-sm">

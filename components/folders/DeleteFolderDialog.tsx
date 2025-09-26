@@ -73,27 +73,34 @@ export function DeleteFolderDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Delete Folder</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Trash2 className="h-5 w-5 text-red-500" />
+            Delete folder
+          </DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete "{folder.name}"?
+            Are you sure you want to delete the folder <strong>"{folder.name}"</strong>?
           </DialogDescription>
         </DialogHeader>
 
-        {hasContent && (
-          <Alert>
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
+        {hasContent ? (
+          <Alert className="border-yellow-200 bg-yellow-50">
+            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+            <AlertDescription className="text-sm text-yellow-800">
               This folder contains:
               <ul className="mt-2 ml-4 list-disc">
                 {linkCount > 0 && (
-                  <li>{linkCount} link{linkCount > 1 ? 's' : ''}</li>
+                  <li><strong>{linkCount}</strong> {linkCount === 1 ? 'link' : 'links'}</li>
                 )}
                 {subfolderCount > 0 && (
-                  <li>{subfolderCount} subfolder{subfolderCount > 1 ? 's' : ''}</li>
+                  <li><strong>{subfolderCount}</strong> {subfolderCount === 1 ? 'subfolder' : 'subfolders'}</li>
                 )}
               </ul>
             </AlertDescription>
           </Alert>
+        ) : (
+          <div className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-md p-3">
+            This folder is empty.
+          </div>
         )}
 
         {hasContent && (
@@ -116,9 +123,12 @@ export function DeleteFolderDialog({
           </div>
         )}
 
-        <DialogFooter>
+        <div className="text-sm text-gray-500">
+          This action cannot be undone. {cascade ? 'All contents will be permanently deleted.' : 'Contents will be moved to the parent folder.'}
+        </div>
+
+        <DialogFooter className="flex flex-row gap-2 justify-end">
           <Button
-            type="button"
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={deleteFolder.isPending}
@@ -126,16 +136,22 @@ export function DeleteFolderDialog({
             Cancel
           </Button>
           <Button
-            type="button"
             variant="destructive"
             onClick={handleDelete}
             disabled={deleteFolder.isPending}
+            className="gap-2"
           >
-            {deleteFolder.isPending && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            {deleteFolder.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              <>
+                <Trash2 className="h-4 w-4" />
+                Delete folder
+              </>
             )}
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete Folder
           </Button>
         </DialogFooter>
       </DialogContent>

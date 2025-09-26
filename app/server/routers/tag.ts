@@ -37,6 +37,98 @@ export const tagRouter = router({
       return tags
     }),
 
+  update: protectedProcedure
+    .input(z.object({
+      id: z.string().uuid(),
+      workspaceId: z.string().uuid(),
+      name: z.string().min(1).max(50),
+      color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional().nullable(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { id, workspaceId, name, color } = input
+
+      const membership = await ctx.prisma.workspace_memberships.findFirst({
+        where: {
+          workspace_id: workspaceId,
+          user_id: ctx.userId,
+        },
+      })
+
+      if (!membership) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You do not have access to this workspace',
+        })
+      }
+
+      const tag = await ctx.prisma.tags.findFirst({
+        where: {
+          id,
+          workspace_id: workspaceId,
+        },
+      })
+
+      if (!tag) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Tag not found',
+        })
+      }
+
+      // Check if new name conflicts with existing tag
+      if (name.toLowerCase() !== tag.name) {
+        const existingTag = await ctx.prisma.tags.findFirst({
+          where: {
+            workspace_id: workspaceId,
+            name: name.toLowerCase(),
+            NOT: { id },
+          },
+        })
+
+        if (existingTag) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'A tag with this name already exists',
+          })
+        }
+      }
+
+      // Update tag and any linked references if name changed
+      const updatedTag = await ctx.prisma.$transaction(async (tx) => {
+        const oldName = tag.name
+
+        const updated = await tx.tags.update({
+          where: { id },
+          data: {
+            name: name.toLowerCase(),
+            color,
+          },
+        })
+
+        // If name changed, update all links that use this tag
+        if (oldName !== name.toLowerCase()) {
+          const links = await tx.links.findMany({
+            where: {
+              workspace_id: workspaceId,
+              tags: { has: oldName },
+            },
+          })
+
+          for (const link of links) {
+            const newTags = link.tags.map(t => t === oldName ? name.toLowerCase() : t)
+            await tx.links.update({
+              where: { id: link.id },
+              data: { tags: newTags },
+            })
+          }
+        }
+
+        return updated
+      })
+
+      return updatedTag
+    }),
+
   create: protectedProcedure
     .input(z.object({
       workspaceId: z.string().uuid(),

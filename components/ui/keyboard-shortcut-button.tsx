@@ -46,7 +46,7 @@ export function KeyboardShortcutButton({
 
         // Check if the key combination matches
         const isMatch =
-          e.key.toLowerCase() === mainKey &&
+          e.key && e.key.toLowerCase() === mainKey &&
           e.metaKey === (hasCmd && isMac) &&
           e.ctrlKey === (hasCtrl || (hasCmd && !isMac)) &&
           e.shiftKey === hasShift &&

@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { KeyboardShortcutButton } from "@/components/ui/keyboard-shortcut-button";
 import { Input } from "@/components/ui/input";
+import { api } from "@/utils/api";
 import {
   ChevronDown,
   ChevronsUpDown,
@@ -13,7 +15,8 @@ import {
   Plus,
   MoreVertical,
   Folder,
-  Link2
+  Link,
+  MousePointerClick
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -22,9 +25,33 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { OnboardingCompleteModal } from "./components/OnboardingCompleteModal";
+import { LinksFooter } from "@/components/links/LinksFooter";
+import { CreateLinkModal } from "@/components/links/CreateLinkModal";
 
 export default function LinksPage() {
+  const params = useParams();
+  const workspaceSlug = params.workspace as string;
   const [searchQuery, setSearchQuery] = useState("");
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // Fetch workspace by slug to get the actual UUID
+  const { data: workspace } = api.workspace.getBySlug.useQuery(
+    { slug: workspaceSlug },
+    { enabled: !!workspaceSlug }
+  );
+
+  // Handle keyboard shortcut for creating link (Cmd/Ctrl + C)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+        e.preventDefault();
+        setIsCreateModalOpen(true);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <>
@@ -72,7 +99,8 @@ export default function LinksPage() {
           <KeyboardShortcutButton
             className="h-9 px-4 bg-black text-white hover:bg-gray-800 text-sm font-medium"
             shortcut="c"
-            onShortcut={() => console.log('Create link shortcut pressed')}
+            onShortcut={() => setIsCreateModalOpen(true)}
+            onClick={() => setIsCreateModalOpen(true)}
           >
             Create link
           </KeyboardShortcutButton>
@@ -125,45 +153,90 @@ export default function LinksPage() {
           {/* Content Area with Border */}
           <div className="border border-gray-200 rounded-lg bg-white" style={{ height: '400px', marginLeft: '109.5px', marginRight: '109.5px' }}>
             <div className="flex flex-col items-center justify-center h-full">
-              {/* Animated Placeholder Links */}
-              <div className="mb-10 space-y-3">
-                {/* First placeholder link */}
-                <div className="flex items-center justify-center gap-4">
-                  <div className="flex items-center gap-3 px-4 py-2.5 bg-white rounded-lg border border-gray-100 shadow-sm">
-                    <Link2 className="h-4 w-4 text-gray-400" />
-                    <div className="h-2 w-24 bg-gray-200 rounded-full animate-pulse"></div>
+              {/* Animated Placeholder Links Container */}
+              <div className="mb-6 h-28 relative overflow-hidden" style={{ width: '280px' }}>
+                {/* Scrolling animation container - doubled for seamless loop */}
+                <div className="flex flex-col gap-3 animate-scroll-vertical">
+                  {/* First set */}
+                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <Link className="h-4 w-4 text-gray-400" />
+                      <div className="h-2 w-24 bg-gray-200 rounded"></div>
+                    </div>
+                    <MousePointerClick className="h-4 w-4 text-gray-400" />
                   </div>
-                  <div className="text-gray-300 text-sm">→</div>
-                </div>
-
-                {/* Second placeholder link */}
-                <div className="flex items-center justify-center gap-4">
-                  <div className="flex items-center gap-3 px-4 py-2.5 bg-white rounded-lg border border-gray-100 shadow-sm">
-                    <Link2 className="h-4 w-4 text-gray-400" />
-                    <div className="h-2 w-24 bg-gray-200 rounded-full animate-pulse"></div>
+                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <Link className="h-4 w-4 text-gray-400" />
+                      <div className="h-2 w-20 bg-gray-200 rounded"></div>
+                    </div>
+                    <MousePointerClick className="h-4 w-4 text-gray-400" />
                   </div>
-                  <div className="text-gray-300 text-sm">→</div>
+                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <Link className="h-4 w-4 text-gray-400" />
+                      <div className="h-2 w-28 bg-gray-200 rounded"></div>
+                    </div>
+                    <MousePointerClick className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <Link className="h-4 w-4 text-gray-400" />
+                      <div className="h-2 w-16 bg-gray-200 rounded"></div>
+                    </div>
+                    <MousePointerClick className="h-4 w-4 text-gray-400" />
+                  </div>
+                  {/* Duplicate set for seamless loop */}
+                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <Link className="h-4 w-4 text-gray-400" />
+                      <div className="h-2 w-24 bg-gray-200 rounded"></div>
+                    </div>
+                    <MousePointerClick className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <Link className="h-4 w-4 text-gray-400" />
+                      <div className="h-2 w-20 bg-gray-200 rounded"></div>
+                    </div>
+                    <MousePointerClick className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <Link className="h-4 w-4 text-gray-400" />
+                      <div className="h-2 w-28 bg-gray-200 rounded"></div>
+                    </div>
+                    <MousePointerClick className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <Link className="h-4 w-4 text-gray-400" />
+                      <div className="h-2 w-16 bg-gray-200 rounded"></div>
+                    </div>
+                    <MousePointerClick className="h-4 w-4 text-gray-400" />
+                  </div>
                 </div>
               </div>
 
               {/* Empty State Text and Buttons */}
-              <div className="text-center">
+              <div className="text-center max-w-md">
                 <h2 className="text-xl font-semibold text-gray-900 mb-2">No links yet</h2>
-                <p className="text-gray-500 mb-6 text-sm">
+                <p className="text-gray-500 mb-7 text-sm leading-relaxed">
                   Start creating short links for your marketing campaigns,<br />
                   referral programs, and more.
                 </p>
                 <div className="flex items-center justify-center gap-3">
                   <KeyboardShortcutButton
-                    className="h-9 px-4 bg-black text-white hover:bg-gray-800 text-sm font-medium"
+                    className="h-10 px-5 bg-black text-white hover:bg-gray-800 text-sm font-medium rounded-md"
                     shortcut="c"
-                    onShortcut={() => console.log('Create link shortcut pressed')}
+                    onShortcut={() => setIsCreateModalOpen(true)}
+                    onClick={() => setIsCreateModalOpen(true)}
                   >
                     Create link
                   </KeyboardShortcutButton>
                   <Button
                     variant="outline"
-                    className="h-9 px-4 text-sm text-gray-600 bg-white hover:bg-gray-50 border-gray-300"
+                    className="h-10 px-5 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 border border-gray-300 rounded-md"
                   >
                     Learn more
                   </Button>
@@ -177,31 +250,26 @@ export default function LinksPage() {
         </div>
 
         {/* Footer - now sticks to bottom */}
-        <div className="pb-6" style={{ marginLeft: '109.5px', marginRight: '109.5px' }}>
-          <div className="px-8 py-4 border border-gray-200 rounded-lg bg-white shadow-sm mx-auto w-fit">
-            <div className="flex items-center gap-12">
-              <span className="text-sm text-gray-600">Viewing 0 links</span>
-              <div className="flex items-center gap-6">
-                <button
-                  disabled
-                  className="text-sm text-gray-400 hover:text-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
-                >
-                  Previous
-                </button>
-                <button
-                  disabled
-                  className="text-sm text-gray-400 hover:text-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <LinksFooter
+          totalLinks={0}
+          currentPage={1}
+          hasNextPage={false}
+          hasPreviousPage={false}
+        />
       </div>
 
       {/* Onboarding complete modal - shows when onboarded=true */}
       <OnboardingCompleteModal />
+
+      {/* Create Link Modal */}
+      {workspace && (
+        <CreateLinkModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          workspaceId={workspace.id}
+          workspaceSlug={workspaceSlug}
+        />
+      )}
     </>
   );
 }

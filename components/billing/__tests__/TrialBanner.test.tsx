@@ -115,17 +115,17 @@ describe('TrialBanner', () => {
     const { rerender } = render(<TrialBanner {...defaultProps} daysRemaining={14} />);
     
     // Info level (>7 days) - Sparkles icon
-    let sparklesIcon = document.querySelector('.lucide-sparkles');
+    const sparklesIcon = document.querySelector('.lucide-sparkles');
     expect(sparklesIcon).toBeInTheDocument();
     
     // Critical level (<=1 day) - AlertCircle icon
     rerender(<TrialBanner {...defaultProps} daysRemaining={1} />);
-    let alertIcon = document.querySelector('.lucide-alert-circle');
+    const alertIcon = document.querySelector('.lucide-alert-circle');
     expect(alertIcon).toBeInTheDocument();
     
     // Notice level (4-7 days) - Clock icon
     rerender(<TrialBanner {...defaultProps} daysRemaining={5} />);
-    let clockIcon = document.querySelector('.lucide-clock');
+    const clockIcon = document.querySelector('.lucide-clock');
     expect(clockIcon).toBeInTheDocument();
   });
 });

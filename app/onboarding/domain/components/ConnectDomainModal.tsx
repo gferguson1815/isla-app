@@ -2,9 +2,10 @@
 
 import { useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Info, AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { HelpWidget } from "@/components/help/HelpWidget";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { trpc } from "@/lib/trpc/client";
 import { toast } from "@/components/ui/use-toast";
 import { DNSErrorWrapper } from "./DNSErrorBoundary";
@@ -16,7 +17,6 @@ interface ConnectDomainModalProps {
 
 export default function ConnectDomainModal({ isOpen }: ConnectDomainModalProps) {
   const [domain, setDomain] = useState("");
-  const [showTooltip, setShowTooltip] = useState(false);
   const [dnsCheckResult, setDnsCheckResult] = useState<{
     valid: boolean;
     status: string;
@@ -192,54 +192,23 @@ export default function ConnectDomainModal({ isOpen }: ConnectDomainModalProps) 
                 <div className="relative">
                   <label className="block text-[13px] font-normal text-gray-700 mb-2">
                     <span>Your domain</span>
-                    <div
-                      className="inline-block ml-1"
-                      onMouseEnter={() => setShowTooltip(true)}
-                      onMouseLeave={() => setShowTooltip(false)}
-                    >
-                      <Info className="w-[14px] h-[14px] text-gray-400 inline-block cursor-help" />
-
-                      {/* Tooltip */}
-                      {showTooltip && (
-                        <div
-                          className="absolute left-28 -top-14 z-50 bg-white border border-gray-200 rounded-lg shadow-xl p-4 w-[300px]"
-                          style={{
-                            boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.15)'
-                          }}
-                        >
-                          <div className="text-sm font-semibold text-gray-900 mb-1">
+                    <InfoTooltip
+                      content={
+                        <div>
+                          <div className="font-semibold mb-1">
                             Connect a custom domain
                           </div>
-                          <div className="text-sm text-gray-600">
-                            Not sure which domain to use?
-                          </div>
+                          <div>Not sure which domain to use?</div>
                           <a
                             href="#"
-                            className="text-sm text-gray-600 underline decoration-1 underline-offset-2 hover:text-gray-800"
+                            className="underline decoration-1 underline-offset-2 hover:text-gray-800"
                           >
                             Check out our guide
                           </a>
-
-                          {/* Arrow pointing to info icon */}
-                          <div
-                            className="absolute -left-2 top-[50%] -translate-y-1/2 w-0 h-0"
-                            style={{
-                              borderTop: '6px solid transparent',
-                              borderBottom: '6px solid transparent',
-                              borderRight: '8px solid #e5e7eb',
-                            }}
-                          />
-                          <div
-                            className="absolute -left-[7px] top-[50%] -translate-y-1/2 w-0 h-0"
-                            style={{
-                              borderTop: '6px solid transparent',
-                              borderBottom: '6px solid transparent',
-                              borderRight: '8px solid white',
-                            }}
-                          />
                         </div>
-                      )}
-                    </div>
+                      }
+                      className="ml-1 inline-block align-middle"
+                    />
                   </label>
                 </div>
 

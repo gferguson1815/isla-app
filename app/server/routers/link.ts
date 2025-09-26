@@ -16,7 +16,30 @@ const createLinkSchema = z.object({
   slug: z.string().optional(),
   title: z.string().optional(),
   description: z.string().optional(),
+  image: z.string().url().optional(),
   tags: z.array(z.string()).max(10).optional(),
+  qrCodeSettings: z.object({
+    backgroundColor: z.string().optional(),
+    foregroundColor: z.string().optional(),
+    logo: z.string().optional(),
+  }).optional(),
+  iosUrl: z.string().url().optional(),
+  androidUrl: z.string().url().optional(),
+  geoTargeting: z.object({
+    locations: z.array(z.object({
+      code: z.string(),
+      name: z.string(),
+      flag: z.string(),
+      url: z.string().url(),
+    })),
+  }).optional(),
+  password: z.string().optional(),
+  expiresAt: z.date().nullable().optional(),
+  expirationUrl: z.string().url().optional(),
+  linkCloaking: z.boolean().optional(),
+  seoIndexing: z.boolean().optional(),
+  externalId: z.string().optional(),
+  tenantId: z.string().optional(),
 });
 
 const updateLinkSchema = z.object({
@@ -25,8 +48,31 @@ const updateLinkSchema = z.object({
   url: z.string().url().optional(),
   title: z.string().optional(),
   description: z.string().optional(),
+  image: z.string().url().optional(),
   folder_id: z.string().uuid().nullable().optional(),
   tags: z.array(z.string()).max(10).optional(),
+  qrCodeSettings: z.object({
+    backgroundColor: z.string().optional(),
+    foregroundColor: z.string().optional(),
+    logo: z.string().optional(),
+  }).optional(),
+  iosUrl: z.string().url().optional(),
+  androidUrl: z.string().url().optional(),
+  geoTargeting: z.object({
+    locations: z.array(z.object({
+      code: z.string(),
+      name: z.string(),
+      flag: z.string(),
+      url: z.string().url(),
+    })),
+  }).optional(),
+  password: z.string().optional(),
+  expiresAt: z.date().nullable().optional(),
+  expirationUrl: z.string().url().optional(),
+  linkCloaking: z.boolean().optional(),
+  seoIndexing: z.boolean().optional(),
+  externalId: z.string().optional(),
+  tenantId: z.string().optional(),
 });
 
 const deleteLinkSchema = z.object({
@@ -150,7 +196,19 @@ export const linkRouter = router({
             slug: finalSlug,
             title: input.title || null,
             description: input.description || null,
+            image: input.image || null,
             tags: processedTags,
+            qr_code_settings: input.qrCodeSettings || null,
+            ios_url: input.iosUrl || null,
+            android_url: input.androidUrl || null,
+            geo_targeting: input.geoTargeting || null,
+            password: input.password || null,
+            expires_at: input.expiresAt || null,
+            expiration_url: input.expirationUrl || null,
+            link_cloaking: input.linkCloaking ?? false,
+            seo_indexing: input.seoIndexing ?? true,
+            external_id: input.externalId || null,
+            tenant_id: input.tenantId || null,
             is_active: true,
             click_count: 0,
             created_at: new Date(),
@@ -168,6 +226,7 @@ export const linkRouter = router({
           shortUrl: getShortUrl(link.slug),
         };
       } catch (error) {
+        console.error('Link creation error:', error);
         if (error instanceof TRPCError) {
           throw error;
         }
@@ -347,8 +406,20 @@ export const linkRouter = router({
           ...(input.url && { url: input.url }),
           ...(input.title !== undefined && { title: input.title }),
           ...(input.description !== undefined && { description: input.description }),
+          ...(input.image !== undefined && { image: input.image }),
           ...(input.folder_id !== undefined && { folder_id: input.folder_id }),
           ...(input.tags !== undefined && { tags: input.tags.map(tag => tag.toLowerCase()) }),
+          ...(input.qrCodeSettings !== undefined && { qr_code_settings: input.qrCodeSettings }),
+          ...(input.iosUrl !== undefined && { ios_url: input.iosUrl }),
+          ...(input.androidUrl !== undefined && { android_url: input.androidUrl }),
+          ...(input.geoTargeting !== undefined && { geo_targeting: input.geoTargeting }),
+          ...(input.password !== undefined && { password: input.password }),
+          ...(input.expiresAt !== undefined && { expires_at: input.expiresAt }),
+          ...(input.expirationUrl !== undefined && { expiration_url: input.expirationUrl }),
+          ...(input.linkCloaking !== undefined && { link_cloaking: input.linkCloaking }),
+          ...(input.seoIndexing !== undefined && { seo_indexing: input.seoIndexing }),
+          ...(input.externalId !== undefined && { external_id: input.externalId }),
+          ...(input.tenantId !== undefined && { tenant_id: input.tenantId }),
           updated_at: new Date(),
         },
       });
@@ -397,6 +468,39 @@ export const linkRouter = router({
       return {
         ...link,
         shortUrl: getShortUrl(link.slug),
+      };
+    }),
+
+  checkSlugAvailability: protectedProcedure
+    .input(z.object({
+      slug: z.string(),
+      workspaceId: z.string().uuid(),
+    }))
+    .query(async ({ ctx, input }) => {
+      // Sanitize and validate the slug
+      const sanitized = sanitizeSlug(input.slug);
+      if (!sanitized || !isValidSlug(sanitized)) {
+        return {
+          available: false,
+          reason: 'Invalid slug format',
+        };
+      }
+
+      // Check if slug already exists
+      const existing = await ctx.prisma.links.findUnique({
+        where: { slug: sanitized },
+      });
+
+      if (existing) {
+        return {
+          available: false,
+          reason: 'This slug is already taken',
+        };
+      }
+
+      return {
+        available: true,
+        slug: sanitized,
       };
     }),
 

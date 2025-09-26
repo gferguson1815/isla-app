@@ -106,6 +106,12 @@ export function useGlobalKeyboardShortcuts() {
     },
     {
       key: "c",
+      metaKey: true,
+      handler: handleQuickCreate,
+    },
+    {
+      key: "c",
+      ctrlKey: true,
       handler: handleQuickCreate,
     },
     {

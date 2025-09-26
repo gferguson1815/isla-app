@@ -74,6 +74,49 @@ export const folderRouter: any = router({
         });
       }
 
+      // Check if workspace plan allows folder creation
+      const workspace = await ctx.prisma.workspaces.findUnique({
+        where: { id: input.workspace_id },
+        select: { plan: true }
+      });
+
+      // Get the folders feature configuration for this plan
+      const foldersFeature = await ctx.prisma.features.findUnique({
+        where: { key: 'folders' }
+      });
+
+      if (foldersFeature) {
+        const planFeature = await ctx.prisma.plan_features.findUnique({
+          where: {
+            plan_feature_id: {
+              plan: workspace?.plan || 'free',
+              feature_id: foldersFeature.id
+            }
+          }
+        });
+
+        if (!planFeature?.enabled) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: planFeature?.custom_message || 'Folders are not available on your current plan. Please upgrade to Pro.'
+          });
+        }
+
+        // Check folder limit if applicable
+        if (planFeature.limit_value !== null && planFeature.limit_value > 0) {
+          const folderCount = await ctx.prisma.folders.count({
+            where: { workspace_id: input.workspace_id }
+          });
+
+          if (folderCount >= planFeature.limit_value) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: `You have reached the maximum number of folders (${planFeature.limit_value}) for your plan.`
+            });
+          }
+        }
+      }
+
       // Validate folder depth
       const level = await validateFolderDepth(ctx.prisma, input.parent_id);
 

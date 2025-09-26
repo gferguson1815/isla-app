@@ -10,6 +10,8 @@ import { billingRouter } from "./billing";
 import { domainRouter } from "./domain";
 import { onboardingRouter } from "./onboarding";
 import { usageRouter } from "./usage";
+import { linkDraftsRouter } from "./linkDrafts";
+import { featuresRouter } from "./features";
 
 export const appRouter = router({
   link: linkRouter,
@@ -23,6 +25,8 @@ export const appRouter = router({
   domain: domainRouter,
   onboarding: onboardingRouter,
   usage: usageRouter,
+  linkDrafts: linkDraftsRouter,
+  features: featuresRouter,
 });
 
 export type AppRouter = typeof appRouter;

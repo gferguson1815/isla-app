@@ -36,38 +36,50 @@ const utmTemplateSchema = z.object({
     .regex(UTM_VALIDATION_RULES.pattern)
     .optional()
     .nullable(),
+  referral: z
+    .string()
+    .max(255)
+    .optional()
+    .nullable(),
 });
 
 export const utmTemplateRouter = router({
   create: protectedProcedure
-    .input(utmTemplateSchema)
+    .input(z.object({
+      workspaceId: z.string().uuid(),
+      ...utmTemplateSchema.shape,
+    }))
     .mutation(async ({ ctx, input }) => {
       const { prisma, userId } = ctx;
+      const { workspaceId, ...templateData } = input;
 
-      // Get user's workspace
+      // Verify user has access to workspace
       const membership = await prisma.workspace_memberships.findFirst({
-        where: { user_id: userId },
-        select: { workspace_id: true },
+        where: {
+          user_id: userId,
+          workspace_id: workspaceId,
+        },
       });
 
       if (!membership) {
         throw new TRPCError({
           code: 'FORBIDDEN',
-          message: 'User is not a member of any workspace',
+          message: 'User does not have access to this workspace',
         });
       }
 
       // Create the UTM template
       const template = await prisma.utm_templates.create({
         data: {
-          workspace_id: membership.workspace_id,
-          name: input.name,
-          description: input.description,
-          utm_source: input.utmSource,
-          utm_medium: input.utmMedium,
-          utm_campaign: input.utmCampaign,
-          utm_term: input.utmTerm,
-          utm_content: input.utmContent,
+          workspace_id: workspaceId,
+          name: templateData.name,
+          description: templateData.description,
+          utm_source: templateData.utmSource,
+          utm_medium: templateData.utmMedium,
+          utm_campaign: templateData.utmCampaign,
+          utm_term: templateData.utmTerm,
+          utm_content: templateData.utmContent,
+          referral: templateData.referral,
           created_by: userId,
         },
       });
@@ -75,27 +87,45 @@ export const utmTemplateRouter = router({
       return template;
     }),
 
-  list: protectedProcedure.query(async ({ ctx }) => {
-    const { prisma, userId } = ctx;
+  list: protectedProcedure
+    .input(z.object({
+      workspaceId: z.string().uuid(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { prisma, userId } = ctx;
 
-    // Get user's workspace
-    const membership = await prisma.workspace_memberships.findFirst({
-      where: { user_id: userId },
-      select: { workspace_id: true },
-    });
+      // Verify user has access to workspace
+      const membership = await prisma.workspace_memberships.findFirst({
+        where: {
+          user_id: userId,
+          workspace_id: input.workspaceId,
+        },
+      });
 
-    if (!membership) {
-      return [];
-    }
+      if (!membership) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'User does not have access to this workspace',
+        });
+      }
 
-    // Get all templates for the workspace
-    const templates = await prisma.utm_templates.findMany({
-      where: { workspace_id: membership.workspace_id },
-      orderBy: { created_at: 'desc' },
-    });
+      // Get all templates for the workspace with user info
+      const templates = await prisma.utm_templates.findMany({
+        where: { workspace_id: input.workspaceId },
+        orderBy: { created_at: 'desc' },
+        include: {
+          creator: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            },
+          },
+        },
+      });
 
-    return templates;
-  }),
+      return templates;
+    }),
 
   update: protectedProcedure
     .input(
@@ -147,6 +177,7 @@ export const utmTemplateRouter = router({
           utm_campaign: data.utmCampaign,
           utm_term: data.utmTerm,
           utm_content: data.utmContent,
+          referral: data.referral,
           updated_at: new Date(),
         },
       });

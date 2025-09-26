@@ -1,1 +1,1 @@
-export { api } from "@/lib/trpc/client";
+export { trpc as api } from "@/lib/trpc/client";

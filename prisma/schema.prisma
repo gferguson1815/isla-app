@@ -123,17 +123,18 @@ model domains {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model folders {
-  id            String     @id @db.Uuid
-  workspace_id  String     @db.Uuid
+  id            String        @id @db.Uuid
+  workspace_id  String        @db.Uuid
   name          String
-  parent_id     String?    @db.Uuid
-  level         Int        @default(0)
-  created_at    DateTime   @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime   @db.Timestamptz(6)
+  parent_id     String?       @db.Uuid
+  level         Int           @default(0)
+  created_at    DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime      @db.Timestamptz(6)
   description   String?
-  folders       folders?   @relation("foldersTofolders", fields: [parent_id], references: [id], onDelete: Cascade)
-  other_folders folders[]  @relation("foldersTofolders")
-  workspaces    workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  folders       folders?      @relation("foldersTofolders", fields: [parent_id], references: [id], onDelete: Cascade)
+  other_folders folders[]     @relation("foldersTofolders")
+  workspaces    workspaces    @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  link_drafts   link_drafts[]
   links         links[]
 
   @@index([parent_id])
@@ -194,6 +195,7 @@ model links {
   favicon                 String?
   password                String?
   expires_at              DateTime?              @db.Timestamptz(6)
+  expiration_url          String?
   is_active               Boolean                @default(true)
   click_limit             Int?
   click_count             Int                    @default(0)
@@ -207,12 +209,17 @@ model links {
   android_url             String?
   enable_geolocation      Boolean                @default(false)
   enable_device_targeting Boolean                @default(false)
+  link_cloaking           Boolean                @default(false)
+  seo_indexing            Boolean                @default(true)
+  external_id             String?
+  tenant_id               String?
   created_at              DateTime               @default(now()) @db.Timestamptz(6)
   updated_at              DateTime               @db.Timestamptz(6)
   created_by              String                 @db.Uuid
   tags                    String[]               @default([])
   deleted_at              DateTime?              @db.Timestamptz(6)
   import_id               String?                @db.Uuid
+  qr_code_settings        Json?
   analytics_aggregates    analytics_aggregates[]
   click_events            click_events[]
   campaigns               campaigns?             @relation(fields: [campaign_id], references: [id])
@@ -267,6 +274,56 @@ model subscriptions {
   @@index([workspace_id])
 }
 
+model link_drafts {
+  id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id        String     @db.Uuid
+  user_id             String     @db.Uuid
+  destination_url     String?
+  slug                String?
+  domain              String?    @default("dub.sh")
+  folder_id           String?    @db.Uuid
+  title               String?
+  description         String?
+  image               String?
+  tags                String[]   @default([])
+  comments            String?
+  utm_source          String?
+  utm_medium          String?
+  utm_campaign        String?
+  utm_term            String?
+  utm_content         String?
+  password            String?
+  expires_at          DateTime?  @db.Timestamptz(6)
+  expiration_url      String?
+  click_limit         Int?
+  ios_url             String?
+  android_url         String?
+  geo_targeting       Json?
+  device_targeting    Json?
+  qr_code_settings    Json?
+  conversion_tracking Json?
+  form_data           Json?
+  link_cloaking       Boolean    @default(false)
+  seo_indexing        Boolean    @default(true)
+  external_id         String?
+  tenant_id           String?
+  created_at          DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime   @default(now()) @updatedAt @db.Timestamptz(6)
+  expires_at_draft    DateTime   @default(dbgenerated("(now() + '30 days'::interval)")) @db.Timestamptz(6)
+  folder              folders?   @relation(fields: [folder_id], references: [id])
+  user                users      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  workspace           workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, workspace_id, id])
+  @@unique([user_id, workspace_id, id], map: "idx_link_drafts_unique")
+  @@index([user_id, workspace_id])
+  @@index([updated_at(sort: Desc)])
+  @@index([expires_at_draft])
+  @@index([expires_at_draft], map: "idx_link_drafts_expires")
+  @@index([updated_at], map: "idx_link_drafts_updated")
+  @@index([user_id, workspace_id], map: "idx_link_drafts_user_workspace")
+}
+
 model tags {
   id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   workspace_id String     @db.Uuid
@@ -274,6 +331,7 @@ model tags {
   usage_count  Int        @default(0)
   created_at   DateTime   @default(now()) @db.Timestamptz(6)
   updated_at   DateTime   @default(now()) @db.Timestamptz(6)
+  color        String?    @db.VarChar(7)
   workspaces   workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
 
   @@unique([workspace_id, name], map: "workspace_id_name")
@@ -310,7 +368,9 @@ model users {
   updated_at            DateTime                @db.Timestamptz(6)
   audit_logs            audit_logs[]
   domains               domains[]
+  link_drafts           link_drafts[]
   links                 links[]
+  utm_templates         utm_templates[]
   workspace_invitations workspace_invitations[]
   workspace_memberships workspace_memberships[]
 }
@@ -325,10 +385,12 @@ model utm_templates {
   utm_campaign String?    @db.VarChar(255)
   utm_term     String?    @db.VarChar(255)
   utm_content  String?    @db.VarChar(255)
+  referral     String?    @db.VarChar(255)
   created_by   String     @db.Uuid
   created_at   DateTime   @default(now()) @db.Timestamptz(6)
   updated_at   DateTime   @default(now()) @db.Timestamptz(6)
   workspaces   workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  creator      users      @relation(fields: [created_by], references: [id], onDelete: Cascade)
 
   @@index([workspace_id])
 }
@@ -393,8 +455,10 @@ model workspaces {
   audit_logs                audit_logs[]
   campaigns                 campaigns[]
   domains                   domains[]
+  feature_usage             feature_usage[]
   folders                   folders[]
   invoices                  invoices[]
+  link_drafts               link_drafts[]
   link_imports              link_imports[]
   links                     links[]
   payment_methods           payment_methods[]
@@ -407,4 +471,54 @@ model workspaces {
 
   @@index([deleted_at])
   @@index([slug])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model features {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key           String          @unique @db.VarChar(100)
+  name          String          @db.VarChar(255)
+  description   String?
+  category      String?         @db.VarChar(100)
+  created_at    DateTime?       @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime?       @default(now()) @updatedAt @db.Timestamptz(6)
+  feature_usage feature_usage[]
+  plan_features plan_features[]
+
+  @@index([category], map: "idx_features_category")
+  @@index([key], map: "idx_features_key")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model plan_features {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plan           String    @db.VarChar(50)
+  feature_id     String    @db.Uuid
+  enabled        Boolean?  @default(false)
+  limit_value    Int?
+  custom_message String?
+  metadata       Json?
+  created_at     DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime? @default(now()) @updatedAt @db.Timestamptz(6)
+  feature        features  @relation(fields: [feature_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([plan, feature_id])
+  @@index([feature_id], map: "idx_plan_features_feature_id")
+  @@index([plan], map: "idx_plan_features_plan")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model feature_usage {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id String     @db.Uuid
+  feature_id   String     @db.Uuid
+  usage_count  Int?       @default(0)
+  last_used_at DateTime?  @db.Timestamptz(6)
+  created_at   DateTime?  @default(now()) @db.Timestamptz(6)
+  feature      features   @relation(fields: [feature_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  workspace    workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([workspace_id, feature_id])
+  @@index([feature_id], map: "idx_feature_usage_feature_id")
+  @@index([workspace_id], map: "idx_feature_usage_workspace_id")
 }

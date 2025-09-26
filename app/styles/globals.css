@@ -279,3 +279,18 @@ textarea[class*="bg-"]:-webkit-autofill,
 select[class*="bg-"]:-webkit-autofill {
   transition: background-color 5000s ease-in-out 0s;
 }
+
+/* Vertical scrolling animation for links placeholder */
+@keyframes scroll-vertical {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-50%);
+  }
+}
+
+.animate-scroll-vertical {
+  animation: scroll-vertical 8s linear infinite;
+  will-change: transform;
+}

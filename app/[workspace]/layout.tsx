@@ -6,8 +6,6 @@ import { IconSidebar } from "@/components/navigation/IconSidebar";
 import { NavigationPanel } from "@/components/navigation/NavigationPanel";
 import { CommandPalette } from "@/components/command/CommandPalette";
 import { KeyboardShortcutsDialog } from "@/components/help/KeyboardShortcutsDialog";
-import { QuickCreateDialog } from "@/components/links/QuickCreateDialog";
-import { GettingStartedWidget } from "@/components/onboarding/GettingStartedWidget";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useAuth } from "@/contexts/auth-context";
 import { useWorkspace } from "@/contexts/workspace-context";
@@ -18,7 +16,8 @@ export default function WorkspaceLayout({
 }: {
   children: React.ReactNode;
 }) {
-  useGlobalKeyboardShortcuts();
+  // Disabled to prevent conflicts with links page shortcuts
+  // useGlobalKeyboardShortcuts();
   const { user } = useAuth();
   const pathname = usePathname();
   const params = useParams();
@@ -67,8 +66,6 @@ export default function WorkspaceLayout({
       </div>
       <CommandPalette />
       <KeyboardShortcutsDialog />
-      <QuickCreateDialog />
-      <GettingStartedWidget />
     </>
   );
 }

@@ -63,6 +63,13 @@ export async function GET(
       url: string;
       workspaceId: string;
       expiresAt: string | null;
+      ios_url: string | null;
+      android_url: string | null;
+      geo_targeting: { locations: Array<{ code: string; url: string }> } | null;
+      password: string | null;
+      expiration_url: string | null;
+      link_cloaking: boolean;
+      seo_indexing: boolean;
     } | null;
 
     if (!linkData) {
@@ -70,7 +77,7 @@ export async function GET(
 
       const { data, error } = await supabase
         .from('links')
-        .select('id, url, workspaceId, expiresAt')
+        .select('id, url, workspaceId, expiresAt, ios_url, android_url, geo_targeting, password, expiration_url, link_cloaking, seo_indexing')
         .eq('slug', slug)
         .single();
 
@@ -83,26 +90,66 @@ export async function GET(
       await redis.setex(cacheKey, 300, JSON.stringify(linkData));
     }
 
+    // Check if link has expired
     if (linkData.expiresAt && new Date(linkData.expiresAt) < new Date()) {
+      // Redirect to expiration URL if provided, otherwise 404
+      if (linkData.expiration_url) {
+        return NextResponse.redirect(linkData.expiration_url);
+      }
       return NextResponse.redirect(new URL('/404', request.url));
+    }
+
+    // Check if password protection is enabled
+    if (linkData.password) {
+      // Check for password in cookie
+      const cookieName = `link-auth-${slug}`;
+      const cookies = request.headers.get('cookie');
+      const hasValidAuth = cookies?.includes(`${cookieName}=`);
+
+      if (!hasValidAuth) {
+        // Redirect to password verification page
+        return NextResponse.redirect(new URL(`/protected/${slug}`, request.url));
+      }
     }
 
     const userAgent = request.headers.get('user-agent') || '';
     const referrer = request.headers.get('referer') || null;
 
+    // Enhanced user agent parsing for device detection
+    const deviceInfo = parseUserAgentEnhanced(userAgent);
+
+    // Extract geo-location from Vercel headers
+    const geoLocation = extractGeoLocation(request);
+
+    // Determine target URL based on targeting rules
+    let targetUrl = linkData.url;
+
+    // Apply device targeting
+    if (linkData.ios_url && deviceInfo.os === 'iOS') {
+      targetUrl = linkData.ios_url;
+    } else if (linkData.android_url && deviceInfo.os === 'Android') {
+      targetUrl = linkData.android_url;
+    }
+    // Apply geo-targeting (overrides device targeting if matched)
+    else if (linkData.geo_targeting?.locations && geoLocation.country) {
+      const matchedLocation = linkData.geo_targeting.locations.find(
+        loc => loc.code === geoLocation.country
+      );
+      if (matchedLocation?.url) {
+        targetUrl = matchedLocation.url;
+      }
+    }
+
     // Check if it's a bot
     if (isBot(userAgent)) {
       // Still redirect bots but skip detailed tracking
-      return NextResponse.redirect(linkData.url, {
+      return NextResponse.redirect(targetUrl, {
         status: 301,
         headers: new Headers({
           'Cache-Control': 'no-store, no-cache, must-revalidate',
         }),
       });
     }
-
-    // Extract geo-location from Vercel headers
-    const geoLocation = extractGeoLocation(request);
 
     // Get privacy settings based on location
     const privacySettings = getPrivacySettings(request, geoLocation.country, geoLocation.region);
@@ -110,7 +157,7 @@ export async function GET(
     // Check if tracking should be blocked
     if (shouldBlockTracking(privacySettings)) {
       // Redirect without tracking
-      return NextResponse.redirect(linkData.url, {
+      return NextResponse.redirect(targetUrl, {
         status: 301,
         headers: new Headers({
           'Cache-Control': 'no-store, no-cache, must-revalidate',
@@ -118,9 +165,6 @@ export async function GET(
         }),
       });
     }
-
-    // Enhanced user agent parsing
-    const deviceInfo = parseUserAgentEnhanced(userAgent);
 
     // Enhanced referrer parsing
     const parsedReferrer = parseReferrer(referrer, linkData.url);
@@ -183,11 +227,48 @@ export async function GET(
       'X-Response-Time': `${responseTime}ms`,
     });
 
+    // Add SEO headers based on seo_indexing setting
+    if (!linkData.seo_indexing) {
+      headers.set('X-Robots-Tag', 'noindex, nofollow');
+    }
+
     if (responseTime > 50) {
       console.warn(`Slow redirect: ${responseTime}ms for slug: ${slug}`);
     }
 
-    return NextResponse.redirect(linkData.url, {
+    // Handle link cloaking
+    if (linkData.link_cloaking) {
+      // For link cloaking, we return an HTML page that performs client-side redirect
+      // This hides the destination URL from being visible in the status bar
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Redirecting...</title>
+  ${!linkData.seo_indexing ? '<meta name="robots" content="noindex, nofollow">' : ''}
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="loader"></div>
+  <script>window.location.replace("${targetUrl}");</script>
+</body>
+</html>`;
+
+      return new NextResponse(html, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html',
+          ...Object.fromEntries(headers.entries()),
+        },
+      });
+    }
+
+    // Regular redirect without cloaking
+    return NextResponse.redirect(targetUrl, {
       status: 301,
       headers,
     });
