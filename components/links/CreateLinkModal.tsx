@@ -735,10 +735,17 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
                     </Label>
                     <Input
                       id="destination"
-                      type="url"
-                      placeholder="https://isla.so/help/article/what-is-isla"
+                      type="text"
+                      placeholder="isla.so/help/article/what-is-isla"
                       value={destinationUrl}
                       onChange={(e) => setDestinationUrl(e.target.value)}
+                      onBlur={(e) => {
+                        // Add https:// if no protocol is specified
+                        const value = e.target.value.trim();
+                        if (value && !value.match(/^https?:\/\//i)) {
+                          setDestinationUrl(`https://${value}`);
+                        }
+                      }}
                       className="h-9 text-sm"
                     />
                   </div>
@@ -1678,9 +1685,14 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
                 <Button
                   onClick={() => {
                     if (destinationUrl) {
+                      // Ensure URL has protocol
+                      const finalUrl = destinationUrl.trim().match(/^https?:\/\//i)
+                        ? destinationUrl.trim()
+                        : `https://${destinationUrl.trim()}`;
+
                       createLinkMutation.mutate({
                         workspaceId,
-                        url: destinationUrl,
+                        url: finalUrl,
                         slug: shortLink || undefined,
                         title: title || undefined,
                         description: description || undefined,
