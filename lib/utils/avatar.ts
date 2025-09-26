@@ -3,13 +3,16 @@
  * Using DiceBear avatars API for deterministic, unique avatars
  */
 
-// Avatar styles that look good for links
+// Avatar styles that look good for links (DiceBear v9)
 const AVATAR_STYLES = [
   'shapes',
   'rings',
-  'beam',
-  'bauhaus',
-  'marble',
+  'glass',
+  'identicon',
+  'thumbs',
+  'lorelei',
+  'notionists',
+  'dylan',
 ] as const;
 
 // Color palettes for avatars
@@ -49,7 +52,7 @@ export function generateLinkAvatar(seed: string): string {
     size: '128',
   });
 
-  return `https://api.dicebear.com/7.x/${style}/svg?${params.toString()}`;
+  return `https://api.dicebear.com/9.x/${style}/svg?${params.toString()}`;
 }
 
 /**
@@ -69,6 +72,6 @@ function simpleHash(str: string): number {
  * Get avatar style from existing URL (for consistency)
  */
 export function getAvatarStyle(avatarUrl: string): string | null {
-  const match = avatarUrl.match(/dicebear\.com\/7\.x\/(\w+)\//);
+  const match = avatarUrl.match(/dicebear\.com\/9\.x\/(\w+)\//);
   return match ? match[1] : null;
 }

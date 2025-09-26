@@ -126,7 +126,7 @@ export function LinksFooter({
           <div className="px-6 py-3 border border-gray-200 rounded-lg bg-white shadow-sm">
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600 whitespace-nowrap">
-                Viewing {totalLinks} {totalLinks === 1 ? 'link' : 'links'}
+                Viewing 1-{Math.min(totalLinks, 2)} of {totalLinks} links
               </span>
               <div className="flex items-center gap-2">
                 <button

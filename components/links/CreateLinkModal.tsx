@@ -79,6 +79,7 @@ interface CreateLinkModalProps {
   onClose: () => void;
   workspaceId: string;
   workspaceSlug?: string;
+  existingLink?: any;
 }
 
 // Generate random short link code - only on client side
@@ -95,7 +96,7 @@ const generateShortLinkCode = () => {
   return result;
 };
 
-export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }: CreateLinkModalProps) {
+export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug, existingLink }: CreateLinkModalProps) {
   const router = useRouter();
   const utils = api.useContext();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -257,6 +258,36 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
     },
   });
 
+  // Update link mutation
+  const updateLinkMutation = api.link.update.useMutation({
+    onSuccess: () => {
+      // Clear the draft after successful link update
+      if (currentDraftId) {
+        deleteDraftMutation.mutate({ id: currentDraftId });
+      }
+      // Reset form
+      setDestinationUrl("");
+      setShortLink(generateShortLinkCode());
+      setTags([]);
+      setComments("");
+      setQrOptions({
+        backgroundColor: '#FFFFFF',
+        foregroundColor: '#000000',
+        logo: '/images/logos/isla-icon-black.svg',
+      });
+      // Invalidate related queries to refresh the data
+      utils.usage.getMetrics.invalidate({ workspaceId });
+      utils.link.list.invalidate({ workspaceId });
+      // Close modal and refresh
+      onClose();
+      router.refresh();
+    },
+    onError: (error) => {
+      console.error('Failed to update link:', error);
+      // You might want to show an error toast here
+    },
+  });
+
   // Get draft query (not mutation)
   const { mutateAsync: getDraft } = api.linkDrafts.get.useMutation();
 
@@ -276,7 +307,7 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
   const allFolders = foldersData?.folders || [];
 
   // Get all tags
-  const allTags = tagsData || [];
+  const allTags = tagsData?.tags || [];
 
   // Filter tags based on search
   const filteredTags = allTags.filter(tag =>
@@ -378,12 +409,70 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
       return;
     }
 
-    // Wait for slug to be generated
+    // If editing an existing link, populate the form with its data
+    if (existingLink) {
+      setIsInitialized(false);
+
+      // Populate form with existing link data
+      setDestinationUrl(existingLink.url || "");
+      setShortLink(existingLink.slug || "");
+      setDomain("isla.sh");
+      setFolderId(existingLink.folderId || undefined);
+      setTitle(existingLink.title || "");
+      setDescription(existingLink.description || "");
+      setImage(existingLink.image || "");
+      setTags(existingLink.tags || []);
+      setComments(existingLink.comments || "");
+      setPassword(existingLink.password || "");
+      setExpiresAt(existingLink.expiresAt ? new Date(existingLink.expiresAt) : undefined);
+      setClickLimit(existingLink.clickLimit || undefined);
+      setIosUrl(existingLink.ios_url || "");
+      setAndroidUrl(existingLink.android_url || "");
+      setGeoTargeting(existingLink.geo_targeting || {});
+      setDeviceTargeting(existingLink.device_targeting || {});
+      setLinkCloakingEnabled(existingLink.link_cloaking || false);
+      setSearchEngineIndexingEnabled(existingLink.seo_indexing || false);
+      setExpirationUrl(existingLink.expiration_url || "");
+      setLinkId(existingLink.id);
+      setLinkAvatar(existingLink.favicon || generateLinkAvatar(existingLink.id));
+
+      // Set initial values for comparison
+      setInitialValues({
+        destinationUrl: existingLink.url || "",
+        slug: existingLink.slug || "",
+        domain: "isla.sh",
+        folderId: existingLink.folderId || undefined,
+        title: existingLink.title || "",
+        description: existingLink.description || "",
+        image: existingLink.image || "",
+        tags: existingLink.tags || [],
+        comments: existingLink.comments || "",
+        password: existingLink.password || "",
+        expiresAt: existingLink.expiresAt ? new Date(existingLink.expiresAt) : undefined,
+        clickLimit: existingLink.clickLimit || undefined,
+        iosUrl: existingLink.ios_url || "",
+        androidUrl: existingLink.android_url || "",
+        geoTargeting: existingLink.geo_targeting || {},
+        deviceTargeting: existingLink.device_targeting || {},
+        linkCloaking: existingLink.link_cloaking || false,
+        seoIndexing: existingLink.seo_indexing || false,
+        expirationUrl: existingLink.expiration_url || "",
+      });
+
+      // Mark as initialized after a small delay
+      const timer = setTimeout(() => {
+        setIsInitialized(true);
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+
+    // Wait for slug to be generated for new links
     if (!generatedSlugRef.current) {
       return;
     }
 
-    // Modal is open and slug is ready, reset everything
+    // Modal is open and slug is ready, reset everything for new link
     // Mark as not initialized first
     setIsInitialized(false);
 
@@ -467,7 +556,7 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [isOpen, workspaceId]);
+  }, [isOpen, workspaceId, existingLink]);
 
   // Update drafts list when autosave occurs
   useEffect(() => {
@@ -956,7 +1045,7 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
                             ))
                           ) : tagSearch ? (
                             <div className="p-2 text-sm text-gray-500">
-                              Press Enter to create "{tagSearch}"
+                              Press Enter to create &ldquo;{tagSearch}&rdquo;
                             </div>
                           ) : (
                             <div className="p-2 text-sm text-gray-500">
@@ -1284,7 +1373,7 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
                           align="center"
                           content={
                             <div className="text-center">
-                              Customize how your links look when shared on social media to improve click-through rates. When enabled, the preview settings below will be shown publicly (instead of the URL's original metatags).{" "}
+                              Customize how your links look when shared on social media to improve click-through rates. When enabled, the preview settings below will be shown publicly (instead of the URL&apos;s original metatags).{" "}
                               <a
                                 href="https://isla.so/help/article/custom-link-previews"
                                 target="_blank"
@@ -1726,7 +1815,7 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
                         ? destinationUrl.trim()
                         : `https://${destinationUrl.trim()}`;
 
-                      createLinkMutation.mutate({
+                      const linkData = {
                         workspaceId,
                         url: finalUrl,
                         slug: shortLink || undefined,
@@ -1750,13 +1839,24 @@ export function CreateLinkModal({ isOpen, onClose, workspaceId, workspaceSlug }:
                         ...(searchEngineIndexingEnabled === false && { seoIndexing: false }),
                         ...(externalId && { externalId: externalId }),
                         ...(tenantId && { tenantId: tenantId }),
-                      });
+                      };
+
+                      if (existingLink) {
+                        updateLinkMutation.mutate({
+                          id: existingLink.id,
+                          ...linkData
+                        });
+                      } else {
+                        createLinkMutation.mutate(linkData);
+                      }
                     }
                   }}
-                  disabled={!destinationUrl || createLinkMutation.isLoading}
+                  disabled={!destinationUrl || createLinkMutation.isLoading || updateLinkMutation.isLoading}
                   className="bg-black text-white hover:bg-gray-800 h-8 px-5 text-sm font-medium"
                 >
-                  {createLinkMutation.isLoading ? 'Creating...' : 'Create link'}
+                  {existingLink
+                    ? (updateLinkMutation.isLoading ? 'Updating...' : 'Update link')
+                    : (createLinkMutation.isLoading ? 'Creating...' : 'Create link')}
                 </Button>
               </div>
             </div>

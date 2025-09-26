@@ -219,6 +219,7 @@ model links {
   updated_at              DateTime               @db.Timestamptz(6)
   created_by              String                 @db.Uuid
   tags                    String[]               @default([])
+  archived                Boolean                @default(false)
   deleted_at              DateTime?              @db.Timestamptz(6)
   import_id               String?                @db.Uuid
   qr_code_settings        Json?

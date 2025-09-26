@@ -39,7 +39,7 @@ export default function TagsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingTag, setEditingTag] = useState<{ id: string; name: string; color: string | null } | null>(null);
-  const [deletingTag, setDeletingTag] = useState<{ id: string; name: string; usage_count?: number } | null>(null);
+  const [deletingTag, setDeletingTag] = useState<{ id: string; name: string; linkCount?: number } | null>(null);
 
   // Fetch workspace by slug to get the actual UUID
   const { data: workspace } = api.workspace.getBySlug.useQuery(
@@ -48,15 +48,18 @@ export default function TagsPage() {
   );
 
   // Fetch tags for the workspace
-  const { data: tags, isLoading, refetch } = api.tag.list.useQuery(
+  const { data: tagsData, isLoading, refetch } = api.tag.list.useQuery(
     { workspaceId: workspace?.id || "" },
     { enabled: !!workspace?.id }
   );
 
+  // Extract tags array from the response
+  const tags = tagsData?.tags || [];
+
   // Filter tags based on search query
-  const filteredTags = tags?.filter(tag =>
+  const filteredTags = tags.filter(tag =>
     tag.name.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
+  );
 
   // Debug logging
   console.log("Workspace ID:", workspace?.id);
@@ -170,7 +173,7 @@ export default function TagsPage() {
                               <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md" title="Number of links using this tag">
                                 <Globe className="h-3.5 w-3.5 text-gray-500" />
                                 <span className="text-sm text-gray-600">
-                                  Used by {tag.usage_count || 0} {(tag.usage_count || 0) === 1 ? 'link' : 'links'}
+                                  Used by {tag.linkCount || 0} {(tag.linkCount || 0) === 1 ? 'link' : 'links'}
                                 </span>
                               </div>
                               <DropdownMenu>
@@ -229,7 +232,7 @@ export default function TagsPage() {
                                       setDeletingTag({
                                         id: tag.id,
                                         name: tag.name,
-                                        usage_count: tag.usage_count
+                                        linkCount: tag.linkCount
                                       });
                                     }}
                                     onKeyDown={(e) => {
@@ -238,7 +241,7 @@ export default function TagsPage() {
                                         setDeletingTag({
                                           id: tag.id,
                                           name: tag.name,
-                                          usage_count: tag.usage_count
+                                          linkCount: tag.linkCount
                                         });
                                       }
                                     }}

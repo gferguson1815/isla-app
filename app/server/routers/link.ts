@@ -76,6 +76,7 @@ const updateLinkSchema = z.object({
   seoIndexing: z.boolean().optional(),
   externalId: z.string().optional(),
   tenantId: z.string().optional(),
+  archived: z.boolean().optional(),
 });
 
 const deleteLinkSchema = z.object({
@@ -102,6 +103,10 @@ const listLinksSchema = z.object({
   tags: z.array(z.string()).optional(),
   tagFilterMode: z.enum(['AND', 'OR']).default('AND').optional(),
   search: z.string().optional(),
+  domain: z.string().optional(),
+  createdBy: z.string().optional(),
+  sortBy: z.enum(['date', 'clicks', 'lastClicked', 'sales']).default('date').optional(),
+  showArchived: z.boolean().default(false).optional(),
 });
 
 export const linkRouter = router({
@@ -271,6 +276,11 @@ export const linkRouter = router({
         workspace_id: input.workspaceId,
       };
 
+      // Add archived filter
+      if (!input.showArchived) {
+        where.archived = false;
+      }
+
       // Add tag filters if provided
       if (input.tags && input.tags.length > 0) {
         const normalizedTags = input.tags.map(tag => tag.toLowerCase());
@@ -283,22 +293,53 @@ export const linkRouter = router({
         }
       }
 
+      // Add domain filter if provided
+      if (input.domain) {
+        where.url = { contains: input.domain, mode: 'insensitive' };
+      }
+
+      // Add creator filter if provided
+      if (input.createdBy) {
+        where.created_by = input.createdBy;
+      }
+
       // Add search filter if provided
       if (input.search) {
         where.OR = [
           { title: { contains: input.search, mode: 'insensitive' } },
           { description: { contains: input.search, mode: 'insensitive' } },
           { url: { contains: input.search, mode: 'insensitive' } },
+          { slug: { contains: input.search, mode: 'insensitive' } },
         ];
       }
 
       // Get total count
       const total = await ctx.prisma.links.count({ where });
 
+      // Determine sort order
+      let orderBy: Record<string, 'asc' | 'desc'> = { created_at: 'desc' };
+      if (input.sortBy) {
+        switch (input.sortBy) {
+          case 'clicks':
+            orderBy = { clicks: 'desc' };
+            break;
+          case 'lastClicked':
+            orderBy = { last_clicked_at: 'desc' };
+            break;
+          case 'sales':
+            orderBy = { sales: 'desc' };
+            break;
+          case 'date':
+          default:
+            orderBy = { created_at: 'desc' };
+            break;
+        }
+      }
+
       // Get links with pagination
       const links = await ctx.prisma.links.findMany({
         where,
-        orderBy: { created_at: 'desc' },
+        orderBy,
         skip: input.offset,
         take: input.limit,
       });
@@ -438,6 +479,44 @@ export const linkRouter = router({
           ...(input.seoIndexing !== undefined && { seo_indexing: input.seoIndexing }),
           ...(input.externalId !== undefined && { external_id: input.externalId }),
           ...(input.tenantId !== undefined && { tenant_id: input.tenantId }),
+          ...(input.archived !== undefined && { archived: input.archived }),
+          updated_at: new Date(),
+        },
+      });
+
+      return {
+        ...updatedLink,
+        shortUrl: getShortUrl(updatedLink.slug),
+      };
+    }),
+
+  archive: protectedProcedure
+    .input(z.object({
+      id: z.string().uuid(),
+      workspaceId: z.string().uuid(),
+      archived: z.boolean(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const serverCtx: ServerPermissionContext = {
+        userId: ctx.userId,
+        prisma: ctx.prisma,
+      };
+
+      // Check link ownership and update permissions
+      const { link, canUpdate } = await requireLinkOwnership(serverCtx, input.id, input.workspaceId);
+
+      if (!canUpdate) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You do not have permission to archive this link',
+        });
+      }
+
+      // Update the link's archived status
+      const updatedLink = await ctx.prisma.links.update({
+        where: { id: input.id },
+        data: {
+          archived: input.archived,
           updated_at: new Date(),
         },
       });

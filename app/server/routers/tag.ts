@@ -34,7 +34,33 @@ export const tagRouter = router({
         ],
       })
 
-      return tags
+      // Get all links for this workspace to count tag usage
+      const links = await ctx.prisma.links.findMany({
+        where: {
+          workspace_id: workspaceId,
+        },
+        select: {
+          tags: true,
+        },
+      })
+
+      // Count how many links use each tag
+      const tagCounts: Record<string, number> = {}
+      for (const link of links) {
+        if (link.tags && Array.isArray(link.tags)) {
+          for (const tagName of link.tags) {
+            tagCounts[tagName] = (tagCounts[tagName] || 0) + 1
+          }
+        }
+      }
+
+      // Add the actual link count to each tag
+      const tagsWithCounts = tags.map(tag => ({
+        ...tag,
+        linkCount: tagCounts[tag.name.toLowerCase()] || 0,
+      }))
+
+      return { tags: tagsWithCounts }
     }),
 
   update: protectedProcedure

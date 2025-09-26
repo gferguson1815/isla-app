@@ -16,7 +16,8 @@ INSERT INTO features (id, key, name, description, category) VALUES
   (gen_random_uuid(), 'geo_targeting', 'Geographic Targeting', 'Redirect users based on location', 'targeting'),
   (gen_random_uuid(), 'device_targeting', 'Device Targeting', 'Different URLs for different devices', 'targeting'),
   (gen_random_uuid(), 'link_cloaking', 'Link Cloaking', 'Hide the destination URL', 'security'),
-  (gen_random_uuid(), 'branded_qr_codes', 'Branded QR Codes', 'Add your logo to QR codes', 'branding')
+  (gen_random_uuid(), 'branded_qr_codes', 'Branded QR Codes', 'Add your logo to QR codes', 'branding'),
+  (gen_random_uuid(), 'link_preview_customization', 'Link Preview Customization', 'Customize link preview images and text', 'branding')
 ON CONFLICT (key) DO NOTHING;
 
 -- Configure features for each plan
@@ -43,6 +44,7 @@ SELECT
     WHEN 'utm_builder' THEN 'UTM Builder is available on Pro plans and above.'
     WHEN 'bulk_import' THEN 'Bulk import is available on Pro plans and above.'
     WHEN 'team_members' THEN 'Team collaboration is available on Pro plans and above.'
+    WHEN 'link_preview_customization' THEN 'Custom link previews require a Pro plan'
     ELSE NULL
   END as custom_message
 FROM features f
